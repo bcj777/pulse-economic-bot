@@ -1,44 +1,64 @@
 import os
 import asyncio
+import requests
 from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from users_db import init_db, add_user, get_users
+
 TOKEN = os.getenv("BOT_TOKEN")
 
-# ===== STORAGE USERS (multi-user) =====
-users = set()
-
-# ===== TELEGRAM APP =====
-bot_app = Application.builder().token(TOKEN).build()
-
-# ===== FLASK =====
 app = Flask(__name__)
 
-# ===== COMMAND: START =====
+# init DB
+init_db()
+
+# telegram app
+bot_app = Application.builder().token(TOKEN).build()
+
+# ===== START COMMAND =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # adăugăm user-ul în listă
-    users.add(chat_id)
+    add_user(chat_id)
 
     await update.message.reply_text(
-        "📊 Bot activ!\nVei primi știri zilnice la 07:00."
+        "📊 Trading News Bot activ\nPrimești alerte high impact 🔴"
     )
 
 bot_app.add_handler(CommandHandler("start", start))
 
-# ===== NEWS (placeholder acum) =====
-def get_economic_news():
-    return "🔴 HIGH IMPACT NEWS\n📉 Market volatility expected"
+# ===== NEWS ENGINE (REAL STRUCTURE) =====
+def get_economic_calendar():
+    # placeholder real API hook (ForexFactory / TradingEconomics etc.)
+    return "🔴 CPI HIGH IMPACT TODAY\n📉 Volatility expected"
 
-# ===== BROADCAST FUNCTION =====
-def send_daily_news():
-    message = get_economic_news()
+def get_crypto_news():
+    return "₿ BTC NEWS: Market moving event detected"
+
+def get_stock_news():
+    return "📈 NVDA / TSLA news: volatility spike"
+
+def build_news():
+    return f"""
+📊 DAILY MARKET BRIEF
+
+{get_economic_calendar()}
+
+{get_crypto_news()}
+
+{get_stock_news()}
+"""
+
+# ===== BROADCAST =====
+def send_news():
+    message = build_news()
+    users = get_users()
 
     async def send_all():
-        for chat_id in list(users):
+        for chat_id in users:
             try:
                 await bot_app.bot.send_message(chat_id=chat_id, text=message)
             except:
@@ -46,22 +66,21 @@ def send_daily_news():
 
     asyncio.run(send_all())
 
-# ===== SCHEDULER (07:00) =====
+# ===== SCHEDULER =====
 scheduler = BackgroundScheduler()
-scheduler.add_job(send_daily_news, "cron", hour=7, minute=0)
+scheduler.add_job(send_news, "cron", hour=7, minute=0)
 scheduler.start()
 
-# ===== ROUTE (Render needs port) =====
+# ===== FLASK =====
 @app.route("/")
 def home():
-    return "Bot is running"
+    return "Bot Running"
 
-# ===== START BOT =====
+# ===== RUN BOT =====
 async def run_bot():
     await bot_app.initialize()
     await bot_app.start()
     await bot_app.updater.start_polling()
-
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
