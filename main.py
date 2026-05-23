@@ -31,8 +31,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     add_user(user_id)
 
     keyboard = [
-        [InlineKeyboardButton("📅 Economic Calendar", callback_data="calendar")],
-        [InlineKeyboardButton("📰 Market News", callback_data="news")]
+        [InlineKeyboardButton("📅 Calendar", callback_data="calendar")],
+        [InlineKeyboardButton("📰 News", callback_data="news")]
     ]
 
     if user_id == ADMIN_ID:
@@ -113,7 +113,7 @@ def get_news():
     return alerts
 
 # =====================
-# CALLBACK HANDLER
+# CALLBACKS
 # =====================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -181,7 +181,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Sent: {sent}")
 
 # =====================
-# REGISTER HANDLERS
+# REGISTER
 # =====================
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("info", info))
@@ -189,7 +189,7 @@ bot_app.add_handler(CommandHandler("broadcast", broadcast))
 bot_app.add_handler(CallbackQueryHandler(button))
 
 # =====================
-# RUN (CRITICAL FIX)
+# RUN (IMPORTANT)
 # =====================
 if __name__ == "__main__":
     bot_app.run_polling()
