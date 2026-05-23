@@ -1,12 +1,22 @@
-from flask import Flask
-from telegram import Bot
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import os
 
-app = Flask(__name__)
+TOKEN = os.getenv("BOT_TOKEN")
 
-@app.route('/')
-def home():
-    return "Pulse Economic Bot online"
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Salut! Sunt activ 🤖")
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(update.message.text)
+
+def main():
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+
+    app.run_polling()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    main()
