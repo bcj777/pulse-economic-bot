@@ -10,28 +10,59 @@ from users_db import init_db, add_user, get_users
 
 TOKEN = os.getenv("BOT_TOKEN")
 
+# PUNE CHAT ID-UL TAU AICI
+ADMIN_ID = 123456789
+
 app = Flask(__name__)
 
-# init database
 init_db()
 
-# telegram app
 bot_app = Application.builder().token(TOKEN).build()
 
 # =====================
-# START COMMAND
+# START
 # =====================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-
     add_user(chat_id)
 
     await update.message.reply_text(
-        "✅ Bot activ!\n🕖 Daily brief la 07:00\n🔴 Real-time alerts active"
+        "✅ Bot activ!\n🕖 Daily brief 07:00\n🔴 Real-time alerts"
     )
 
-bot_app.add_handler(CommandHandler("start", start))
+# =====================
+# BROADCAST
+# =====================
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ADMIN_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "Folosește:\n/broadcast mesaj"
+        )
+        return
+
+    msg = " ".join(context.args)
+    users = get_users()
+
+    sent = 0
+
+    for u in users:
+        try:
+            await bot_app.bot.send_message(
+                chat_id=u,
+                text=msg
+            )
+            sent += 1
+        except:
+            pass
+
+    await update.message.reply_text(
+        f"✅ Trimis la {sent} utilizatori"
+    )
 
 # =====================
 # DAILY TEST
@@ -45,12 +76,19 @@ def send_daily():
             try:
                 await bot_app.bot.send_message(
                     chat_id=u,
-                    text="🕖 TEST DAILY MESSAGE"
+                    text="🕖 Daily test"
                 )
-            except Exception as e:
-                print(e)
+            except:
+                pass
 
     asyncio.run(send())
+
+# =====================
+# HANDLERS
+# =====================
+
+bot_app.add_handler(CommandHandler("start", start))
+bot_app.add_handler(CommandHandler("broadcast", broadcast))
 
 # =====================
 # SCHEDULER
