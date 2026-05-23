@@ -1,29 +1,30 @@
-import sqlite3
+import json
+import os
 
-DB_NAME = "users.db"
+DB_PATH = "/data/users.json"
+
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            chat_id INTEGER PRIMARY KEY
-        )
-    """)
-    conn.commit()
-    conn.close()
+    os.makedirs("/data", exist_ok=True)
 
-def add_user(chat_id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (chat_id) VALUES (?)", (chat_id,))
-    conn.commit()
-    conn.close()
+    if not os.path.exists(DB_PATH):
+        with open(DB_PATH, "w") as f:
+            json.dump([], f)
+
 
 def get_users():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT chat_id FROM users")
-    users = [row[0] for row in c.fetchall()]
-    conn.close()
-    return users
+    try:
+        with open(DB_PATH, "r") as f:
+            return json.load(f)
+    except:
+        return []
+
+
+def add_user(user_id):
+    users = get_users()
+
+    if user_id not in users:
+        users.append(user_id)
+
+        with open(DB_PATH, "w") as f:
+            json.dump(users, f)
