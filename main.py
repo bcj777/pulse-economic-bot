@@ -11,48 +11,107 @@ from users_db import init_db, add_user, get_users
 TOKEN = os.getenv("BOT_TOKEN")
 
 app = Flask(__name__)
-
-# init DB
 init_db()
 
-# telegram app
 bot_app = Application.builder().token(TOKEN).build()
 
-# ===== START COMMAND =====
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+# =========================
+# 🧠 SCORE ENGINE
+# =========================
 
-    add_user(chat_id)
+def score_event(text):
+    keywords_red = ["CPI", "NFP", "RATE", "FOMC", "INFLATION"]
+    keywords_high = ["BTC", "ETH", "NASDAQ", "S&P", "NASDAQ"]
 
-    await update.message.reply_text(
-        "📊 Trading News Bot activ\nPrimești alerte high impact 🔴"
-    )
+    t = text.upper()
 
-bot_app.add_handler(CommandHandler("start", start))
+    if any(k in t for k in keywords_red):
+        return "🔴 RED IMPACT"
+    if any(k in t for k in keywords_high):
+        return "🟠 HIGH IMPACT"
+    return "🟡 MEDIUM"
 
-# ===== NEWS ENGINE (REAL STRUCTURE) =====
+# =========================
+# 📊 ECONOMIC CALENDAR (SIMPLIFIED API HOOK)
+# =========================
+
 def get_economic_calendar():
-    # placeholder real API hook (ForexFactory / TradingEconomics etc.)
-    return "🔴 CPI HIGH IMPACT TODAY\n📉 Volatility expected"
+    # placeholder for TradingEconomics / ForexFactory scraping later
+    events = [
+        "CPI Inflation Report",
+        "Unemployment Rate NFP",
+        "FOMC Meeting Minutes"
+    ]
 
-def get_crypto_news():
-    return "₿ BTC NEWS: Market moving event detected"
+    output = []
+    for e in events:
+        score = score_event(e)
+        if "RED" in score:
+            output.append(f"{score} → {e}")
 
-def get_stock_news():
-    return "📈 NVDA / TSLA news: volatility spike"
+    return "\n".join(output)
+
+# =========================
+# ₿ CRYPTO DATA (CoinGecko SIMPLE)
+# =========================
+
+def get_crypto():
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": "bitcoin,ethereum",
+            "vs_currencies": "usd",
+            "include_24hr_change": "true"
+        }
+
+        r = requests.get(url, params=params).json()
+
+        btc = r["bitcoin"]["usd"]
+        btc_chg = r["bitcoin"]["usd_24h_change"]
+
+        eth = r["ethereum"]["usd"]
+        eth_chg = r["ethereum"]["usd_24h_change"]
+
+        return f"""
+₿ CRYPTO MARKET
+BTC: ${btc} ({btc_chg:.2f}%)
+ETH: ${eth} ({eth_chg:.2f}%)
+"""
+    except:
+        return "₿ CRYPTO ERROR"
+
+# =========================
+# 📈 STOCKS (SIMPLIFIED MOCK LOGIC)
+# =========================
+
+def get_stocks():
+    # placeholder (later AlphaVantage / Yahoo Finance)
+    return """
+📈 STOCKS
+NVDA: +2.3%
+TSLA: -1.1%
+AAPL: +0.8%
+"""
+
+# =========================
+# 🧠 FINAL NEWS BUILDER
+# =========================
 
 def build_news():
     return f"""
-📊 DAILY MARKET BRIEF
+📊 MARKET INTELLIGENCE TERMINAL
 
 {get_economic_calendar()}
 
-{get_crypto_news()}
+{get_crypto()}
 
-{get_stock_news()}
+{get_stocks()}
 """
 
-# ===== BROADCAST =====
+# =========================
+# 📤 BROADCAST
+# =========================
+
 def send_news():
     message = build_news()
     users = get_users()
@@ -66,17 +125,40 @@ def send_news():
 
     asyncio.run(send_all())
 
-# ===== SCHEDULER =====
+# =========================
+# 🤖 COMMANDS
+# =========================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    add_user(chat_id)
+
+    await update.message.reply_text(
+        "📊 Market Intelligence Bot ACTIVE\n🔴 High-impact alerts enabled"
+    )
+
+bot_app.add_handler(CommandHandler("start", start))
+
+# =========================
+# ⏰ SCHEDULER
+# =========================
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(send_news, "cron", hour=7, minute=0)
 scheduler.start()
 
-# ===== FLASK =====
+# =========================
+# 🌐 FLASK SERVER
+# =========================
+
 @app.route("/")
 def home():
-    return "Bot Running"
+    return "Market Intelligence Bot Running"
 
-# ===== RUN BOT =====
+# =========================
+# 🚀 RUN
+# =========================
+
 async def run_bot():
     await bot_app.initialize()
     await bot_app.start()
