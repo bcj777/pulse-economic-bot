@@ -23,22 +23,26 @@ bot_app = Application.builder().token(TOKEN).build()
 # START
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    add_user(update.effective_chat.id)
+    user_id = update.effective_chat.id
+    add_user(user_id)
 
     keyboard = [
         [InlineKeyboardButton("📅 Calendar", callback_data="calendar")],
-        [InlineKeyboardButton("📰 News", callback_data="news")],
-        [InlineKeyboardButton("⚙️ Admin Panel", callback_data="panel")]
+        [InlineKeyboardButton("📰 News", callback_data="news")]
     ]
 
+    # ADMIN ONLY BUTTON
+    if user_id == ADMIN_ID:
+        keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="panel")])
+
     await update.message.reply_text(
-        "*📊 TRADING INTELLIGENCE BOT PRO*",
+        "*📊 Trading Bot ACTIVE*",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# FINNHUB CALENDAR
+# CALENDAR (WITH DATE + TIME)
 # =========================
 def get_calendar():
     try:
@@ -48,16 +52,24 @@ def get_calendar():
         events = data.get("economicCalendar", [])
 
         out = []
-        for e in events[:10]:
-            out.append(f"📊 {e.get('event')} | {e.get('country')} | {e.get('impact')}")
 
-        return "*📅 ECONOMIC CALENDAR*\n\n" + "\n".join(out)
+        for e in events[:10]:
+            date = e.get("date", "no-date")
+            time_ = e.get("time", "no-time")
+
+            out.append(
+                f"📅 {date} {time_}\n"
+                f"📊 {e.get('event')}\n"
+                f"🌍 {e.get('country')} | Impact: {e.get('impact')}"
+            )
+
+        return "*📅 ECONOMIC CALENDAR*\n\n" + "\n\n".join(out)
 
     except:
         return "Calendar error"
 
 # =========================
-# NEWS ENGINE (REAL)
+# NEWS ENGINE
 # =========================
 seen = set()
 
@@ -79,7 +91,7 @@ def get_news():
             keywords = ["fed", "inflation", "rate", "cpi", "nfp", "stock", "crypto"]
 
             if any(k in headline.lower() for k in keywords):
-                alerts.append(f"🚨 NEWS\n\n_{headline}_")
+                alerts.append(f"🚨 NEWS\n\n{headline}")
 
     except:
         pass
@@ -87,7 +99,7 @@ def get_news():
     return alerts
 
 # =========================
-# SAFE LOOP
+# NEWS LOOP
 # =========================
 def news_loop():
     while True:
@@ -100,7 +112,7 @@ def news_loop():
                 for u in users:
                     for n in news:
                         try:
-                            await bot_app.bot.send_message(chat_id=u, text=n, parse_mode="Markdown")
+                            await bot_app.bot.send_message(chat_id=u, text=n)
                         except:
                             pass
 
@@ -109,73 +121,52 @@ def news_loop():
         time.sleep(120)
 
 # =========================
-# BUTTON HANDLER
+# CALLBACKS (SINGLE HANDLER FIX)
 # =========================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
 
+    user_id = q.from_user.id
+
+    # CALENDAR
     if q.data == "calendar":
         await q.message.reply_text(get_calendar(), parse_mode="Markdown")
 
+    # NEWS
     elif q.data == "news":
-        await q.message.reply_text("*📰 News active*", parse_mode="Markdown")
+        await q.message.reply_text("📰 News engine active")
 
-    elif q.data == "panel":
-        await admin_panel(update, context)
+    # ADMIN PANEL (ONLY ADMIN)
+    elif q.data == "panel" and user_id == ADMIN_ID:
+        keyboard = [
+            [InlineKeyboardButton("👥 Users", callback_data="admin_users")],
+            [InlineKeyboardButton("📋 Commands", callback_data="admin_list")],
+            [InlineKeyboardButton("📊 Status", callback_data="admin_status")]
+        ]
 
-# =========================
-# ADMIN PANEL PRO
-# =========================
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id != ADMIN_ID:
-        return
+        await q.message.reply_text(
+            "*⚙️ ADMIN PANEL*",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
-    keyboard = [
-        [InlineKeyboardButton("👥 Users", callback_data="admin_users")],
-        [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
-        [InlineKeyboardButton("📋 Commands", callback_data="admin_list")],
-        [InlineKeyboardButton("📊 System Status", callback_data="admin_status")]
-    ]
-
-    await update.effective_message.reply_text(
-        "*⚙️ ADMIN PANEL PRO*",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-# =========================
-# ADMIN CALLBACKS
-# =========================
-async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-
-    if q.from_user.id != ADMIN_ID:
-        return
-
-    if q.data == "admin_users":
+    # ADMIN FUNCTIONS
+    elif q.data == "admin_users" and user_id == ADMIN_ID:
         users = get_users()
         await q.message.reply_text(f"*Users:* {len(users)}", parse_mode="Markdown")
 
-    elif q.data == "admin_list":
-        text = """
-*Commands:*
-/info
-/broadcast
-/testnews
-/list
-"""
-        await q.message.reply_text(text, parse_mode="Markdown")
+    elif q.data == "admin_list" and user_id == ADMIN_ID:
+        await q.message.reply_text(
+            "/info\n/broadcast\n/testnews\n/calendar",
+            parse_mode="Markdown"
+        )
 
-    elif q.data == "admin_status":
-        await q.message.reply_text("*System: ONLINE*\nNews: ACTIVE", parse_mode="Markdown")
-
-    elif q.data == "admin_broadcast":
-        await q.message.reply_text("Use: /broadcast mesaj")
+    elif q.data == "admin_status" and user_id == ADMIN_ID:
+        await q.message.reply_text("*System ONLINE*", parse_mode="Markdown")
 
 # =========================
-# INFO (ADMIN ONLY)
+# INFO
 # =========================
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
@@ -211,26 +202,24 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Sent: {sent}")
 
 # =========================
-# COMMANDS
+# REGISTER HANDLERS
 # =========================
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("info", info))
 bot_app.add_handler(CommandHandler("broadcast", broadcast))
 bot_app.add_handler(CallbackQueryHandler(button))
-bot_app.add_handler(CallbackQueryHandler(admin_callbacks))
 
 # =========================
-# RUN
+# RUN BOT
 # =========================
 async def run():
     await bot_app.initialize()
     await bot_app.start()
-    await bot_app.updater.start_polling()
-    await asyncio.Event().wait()
+    await bot_app.run_polling()
 
 @app.route("/")
 def home():
-    return "BOT PRO ACTIVE"
+    return "BOT RUNNING"
 
 if __name__ == "__main__":
     threading.Thread(target=lambda: asyncio.run(run())).start()
