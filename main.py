@@ -16,7 +16,7 @@ from users_db import init_db, add_user, get_users
 
 TOKEN = os.getenv("BOT_TOKEN")
 
-# PUNE CHAT ID-UL TAU AICI
+# PUNE CHAT ID-UL TAU AICI DUPA CE IL AFLI
 ADMIN_ID = 123456789
 
 app = Flask(__name__)
@@ -55,7 +55,8 @@ def get_calendar():
             + "\n".join(high_events[:10])
         )
 
-    except:
+    except Exception as e:
+        print(e)
         return "Calendar indisponibil."
 
 # =========================
@@ -74,7 +75,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        "📊 Economic Bot\n\nAlege:",
+        f"📊 Economic Bot\n\nChat ID:\n{chat_id}",
         reply_markup=reply_markup
     )
 
@@ -93,11 +94,20 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "news":
         await query.message.reply_text(
-            "🔴 Live news engine coming soon"
+            "🔴 Live news coming soon"
         )
 
 # =========================
-# BROADCAST
+# /CALENDAR
+# =========================
+
+async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        get_calendar()
+    )
+
+# =========================
+# /BROADCAST
 # =========================
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -112,8 +122,8 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = " ".join(context.args)
-
     users = get_users()
+
     sent = 0
 
     for u in users:
@@ -131,15 +141,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# CALENDAR CMD
-# =========================
-
-async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        get_calendar()
-    )
-
-# =========================
 # DAILY 07:00
 # =========================
 
@@ -154,8 +155,8 @@ def send_daily():
                     chat_id=u,
                     text=msg
                 )
-            except:
-                pass
+            except Exception as e:
+                print(e)
 
     asyncio.run(send())
 
@@ -178,7 +179,7 @@ bot_app.add_handler(CommandHandler("broadcast", broadcast))
 bot_app.add_handler(CallbackQueryHandler(button))
 
 # =========================
-# RUN
+# RUN BOT
 # =========================
 
 async def run():
