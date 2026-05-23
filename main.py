@@ -2,10 +2,11 @@ import os
 import asyncio
 import threading
 from flask import Flask
-from telegram.ext import Application
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from users_db import init_db, get_users
+from users_db import init_db, add_user, get_users
 
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -16,6 +17,21 @@ init_db()
 
 # telegram app
 bot_app = Application.builder().token(TOKEN).build()
+
+# =====================
+# START COMMAND
+# =====================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+
+    add_user(chat_id)
+
+    await update.message.reply_text(
+        "✅ Bot activ!\n🕖 Daily brief la 07:00\n🔴 Real-time alerts active"
+    )
+
+bot_app.add_handler(CommandHandler("start", start))
 
 # =====================
 # DAILY TEST
