@@ -16,43 +16,37 @@ init_db()
 bot_app = Application.builder().token(TOKEN).build()
 
 # =========================
-# 🧠 SCORE ENGINE
+# 🧠 PRIORITY ENGINE (LEVEL 5)
 # =========================
 
-def score_event(text):
-    keywords_red = ["CPI", "NFP", "RATE", "FOMC", "INFLATION"]
-    keywords_high = ["BTC", "ETH", "NASDAQ", "S&P", "NASDAQ"]
-
-    t = text.upper()
-
-    if any(k in t for k in keywords_red):
-        return "🔴 RED IMPACT"
-    if any(k in t for k in keywords_high):
-        return "🟠 HIGH IMPACT"
-    return "🟡 MEDIUM"
+def priority(label):
+    return {
+        "CRITICAL": "🔴 CRITICAL",
+        "IMPORTANT": "🟠 IMPORTANT",
+        "INFO": "🟡 INFO"
+    }.get(label, "🟡 INFO")
 
 # =========================
-# 📊 ECONOMIC CALENDAR (SIMPLIFIED API HOOK)
+# 🌍 MACRO CALENDAR (FILTERED)
 # =========================
 
-def get_economic_calendar():
-    # placeholder for TradingEconomics / ForexFactory scraping later
+def get_macro():
+    # placeholder for TradingEconomics API later
     events = [
-        "CPI Inflation Report",
-        "Unemployment Rate NFP",
-        "FOMC Meeting Minutes"
+        ("CPI Inflation YoY", "CRITICAL"),
+        ("NFP Employment Data", "CRITICAL"),
+        ("Retail Sales", "IMPORTANT")
     ]
 
-    output = []
-    for e in events:
-        score = score_event(e)
-        if "RED" in score:
-            output.append(f"{score} → {e}")
+    out = []
+    for name, lvl in events:
+        if lvl == "CRITICAL":
+            out.append(f"{priority(lvl)} → {name}")
 
-    return "\n".join(output)
+    return "\n".join(out)
 
 # =========================
-# ₿ CRYPTO DATA (CoinGecko SIMPLE)
+# ₿ CRYPTO INTELLIGENCE
 # =========================
 
 def get_crypto():
@@ -72,36 +66,44 @@ def get_crypto():
         eth = r["ethereum"]["usd"]
         eth_chg = r["ethereum"]["usd_24h_change"]
 
+        def trend(x):
+            if x > 2:
+                return "📈 STRONG UP"
+            elif x < -2:
+                return "📉 STRONG DOWN"
+            return "➡️ SIDEWAYS"
+
         return f"""
-₿ CRYPTO MARKET
-BTC: ${btc} ({btc_chg:.2f}%)
-ETH: ${eth} ({eth_chg:.2f}%)
+₿ CRYPTO INTELLIGENCE
+BTC: ${btc} ({btc_chg:.2f}%) {trend(btc_chg)}
+ETH: ${eth} ({eth_chg:.2f}%) {trend(eth_chg)}
 """
     except:
         return "₿ CRYPTO ERROR"
 
 # =========================
-# 📈 STOCKS (SIMPLIFIED MOCK LOGIC)
+# 📊 STOCK INTELLIGENCE (SIMPLIFIED)
 # =========================
 
 def get_stocks():
-    # placeholder (later AlphaVantage / Yahoo Finance)
+    # placeholder logic (upgrade later with real API)
     return """
-📈 STOCKS
-NVDA: +2.3%
-TSLA: -1.1%
-AAPL: +0.8%
+📈 STOCK MARKET
+NVDA → 📈 STRONG UP
+TSLA → 📉 WEAK DOWN
+AAPL → ➡️ STABLE
 """
 
 # =========================
-# 🧠 FINAL NEWS BUILDER
+# 📊 FINAL BRIEF
 # =========================
 
-def build_news():
+def build_brief():
     return f"""
-📊 MARKET INTELLIGENCE TERMINAL
+📊 MARKET INTELLIGENCE BRIEF
 
-{get_economic_calendar()}
+🌍 MACRO RISK
+{get_macro()}
 
 {get_crypto()}
 
@@ -109,17 +111,17 @@ def build_news():
 """
 
 # =========================
-# 📤 BROADCAST
+# 📤 BROADCAST SYSTEM
 # =========================
 
-def send_news():
-    message = build_news()
+def send_brief():
+    msg = build_brief()
     users = get_users()
 
     async def send_all():
         for chat_id in users:
             try:
-                await bot_app.bot.send_message(chat_id=chat_id, text=message)
+                await bot_app.bot.send_message(chat_id=chat_id, text=msg)
             except:
                 pass
 
@@ -134,7 +136,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     add_user(chat_id)
 
     await update.message.reply_text(
-        "📊 Market Intelligence Bot ACTIVE\n🔴 High-impact alerts enabled"
+        "📊 Market Intelligence LEVEL 5 ACTIVE\n🔴 Macro risk filtering enabled"
     )
 
 bot_app.add_handler(CommandHandler("start", start))
@@ -144,16 +146,16 @@ bot_app.add_handler(CommandHandler("start", start))
 # =========================
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(send_news, "cron", hour=7, minute=0)
+scheduler.add_job(send_brief, "cron", hour=7, minute=0)
 scheduler.start()
 
 # =========================
-# 🌐 FLASK SERVER
+# 🌐 FLASK
 # =========================
 
 @app.route("/")
 def home():
-    return "Market Intelligence Bot Running"
+    return "Market Intelligence LEVEL 5 Running"
 
 # =========================
 # 🚀 RUN
