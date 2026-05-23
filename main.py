@@ -1,13 +1,14 @@
 import os
 from flask import Flask, request
-from telegram import Update
+from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 TOKEN = os.getenv("BOT_TOKEN")
 
 app = Flask(__name__)
 
-application = Application.builder().token(TOKEN).build()
+bot = Bot(token=TOKEN)
+application = Application.builder().bot(bot).build()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Salut! Bot activ 🤖")
@@ -17,12 +18,12 @@ application.add_handler(CommandHandler("start", start))
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Bot is running"
-
+    return "OK"
 
 @app.route(f"/webhook/{TOKEN}", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
+    data = request.get_json(force=True)
+    update = Update.de_json(data, bot)
     application.update_queue.put_nowait(update)
     return "ok"
 
