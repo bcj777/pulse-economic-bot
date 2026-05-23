@@ -3,24 +3,30 @@ import asyncio
 import threading
 import requests
 from flask import Flask
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    CallbackQueryHandler
+)
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from users_db import init_db, add_user, get_users
 
 TOKEN = os.getenv("BOT_TOKEN")
 
+# PUNE CHAT ID-UL TAU AICI
+ADMIN_ID = 123456789
+
 app = Flask(__name__)
 
-# DATABASE
 init_db()
 
-# TELEGRAM APP
 bot_app = Application.builder().token(TOKEN).build()
 
 # =========================
-# CALENDAR HIGH IMPACT
+# CALENDAR
 # =========================
 
 def get_calendar():
@@ -42,43 +48,102 @@ def get_calendar():
                 )
 
         if not high_events:
-            return "📅 Azi nu sunt evenimente HIGH impact."
+            return "📅 Nu sunt evenimente HIGH impact."
 
         return (
             "📅 HIGH IMPACT CALENDAR\n\n"
             + "\n".join(high_events[:10])
         )
 
-    except Exception as e:
-        print(e)
-        return "Calendar momentan indisponibil."
+    except:
+        return "Calendar indisponibil."
 
 # =========================
-# START COMMAND
+# START
 # =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-
     add_user(chat_id)
 
+    keyboard = [
+        [InlineKeyboardButton("📅 Calendar", callback_data="calendar")],
+        [InlineKeyboardButton("📢 News", callback_data="news")]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
-        "✅ Bot activ!\n\n🕖 Calendar HIGH impact la 07:00\n\nFolosește /calendar pentru test."
+        "📊 Economic Bot\n\nAlege:",
+        reply_markup=reply_markup
     )
 
 # =========================
-# /CALENDAR COMMAND
+# BUTTONS
+# =========================
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "calendar":
+        await query.message.reply_text(
+            get_calendar()
+        )
+
+    elif query.data == "news":
+        await query.message.reply_text(
+            "🔴 Live news engine coming soon"
+        )
+
+# =========================
+# BROADCAST
+# =========================
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_chat.id != ADMIN_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "/broadcast mesaj"
+        )
+        return
+
+    msg = " ".join(context.args)
+
+    users = get_users()
+    sent = 0
+
+    for u in users:
+        try:
+            await bot_app.bot.send_message(
+                chat_id=u,
+                text=msg
+            )
+            sent += 1
+        except:
+            pass
+
+    await update.message.reply_text(
+        f"Trimis la {sent} useri"
+    )
+
+# =========================
+# CALENDAR CMD
 # =========================
 
 async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = get_calendar()
-    await update.message.reply_text(msg)
+    await update.message.reply_text(
+        get_calendar()
+    )
 
 # =========================
-# DAILY 07:00 SEND
+# DAILY 07:00
 # =========================
 
-def send_daily_calendar():
+def send_daily():
     msg = get_calendar()
     users = get_users()
 
@@ -89,25 +154,14 @@ def send_daily_calendar():
                     chat_id=u,
                     text=msg
                 )
-            except Exception as e:
-                print(e)
+            except:
+                pass
 
     asyncio.run(send())
 
-# =========================
-# HANDLERS
-# =========================
-
-bot_app.add_handler(CommandHandler("start", start))
-bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
-
-# =========================
-# SCHEDULER 07:00
-# =========================
-
 scheduler = BackgroundScheduler()
 scheduler.add_job(
-    send_daily_calendar,
+    send_daily,
     "cron",
     hour=7,
     minute=0
@@ -115,7 +169,16 @@ scheduler.add_job(
 scheduler.start()
 
 # =========================
-# BOT LOOP
+# HANDLERS
+# =========================
+
+bot_app.add_handler(CommandHandler("start", start))
+bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
+bot_app.add_handler(CommandHandler("broadcast", broadcast))
+bot_app.add_handler(CallbackQueryHandler(button))
+
+# =========================
+# RUN
 # =========================
 
 async def run():
@@ -124,17 +187,9 @@ async def run():
     await bot_app.updater.start_polling()
     await asyncio.Event().wait()
 
-# =========================
-# FLASK
-# =========================
-
 @app.route("/")
 def home():
     return "BOT RUNNING"
-
-# =========================
-# START APP
-# =========================
 
 if __name__ == "__main__":
     threading.Thread(
