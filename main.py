@@ -1,7 +1,6 @@
 import os
 import asyncio
 import threading
-import time
 import requests
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -28,16 +27,16 @@ def get_calendar():
         url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
         data = requests.get(url, timeout=10).json()
 
-        out = []
+        events = []
 
         for e in data:
             if str(e.get("impact", "")).lower() == "high":
-                out.append(f"🔴 {e.get('country')} - {e.get('title')}")
+                events.append(f"🔴 {e.get('country')} - {e.get('title')}")
 
-        if not out:
+        if not events:
             return "📅 Nu sunt evenimente HIGH impact."
 
-        return "📅 HIGH IMPACT CALENDAR\n\n" + "\n".join(out[:10])
+        return "📅 HIGH IMPACT CALENDAR\n\n" + "\n".join(events[:10])
 
     except:
         return "Calendar indisponibil"
@@ -55,7 +54,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "📊 Economic Bot activ",
+        "📊 Trading Bot activ",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -70,19 +69,23 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(get_calendar())
 
     elif q.data == "news":
-        await q.message.reply_text("🔴 News engine loading...")
+        await q.message.reply_text("🔴 News engine coming soon")
 
 # =========================
-# CALENDAR CMD
+# /CALENDAR
 # =========================
 async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(get_calendar())
 
 # =========================
-# BROADCAST
+# /BROADCAST (ADMIN ONLY)
 # =========================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("/broadcast mesaj")
         return
 
     msg = " ".join(context.args)
@@ -92,7 +95,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for u in users:
         try:
-            await bot_app.bot.send_message(u, msg)
+            await bot_app.bot.send_message(chat_id=u, text=msg)
             sent += 1
         except:
             pass
@@ -100,7 +103,32 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Trimis la {sent} useri")
 
 # =========================
-# 07:00 CALENDAR
+# /INFO (ADMIN ONLY)
+# =========================
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ADMIN_ID:
+        return
+
+    users = get_users()
+
+    text = f"👥 TOTAL USERS: {len(users)}\n\n"
+
+    for u in users:
+        try:
+            chat = await bot_app.bot.get_chat(u)
+
+            name = chat.first_name or ""
+            username = chat.username or "no_username"
+
+            text += f"• {name} (@{username}) | {u}\n"
+
+        except:
+            text += f"• {u}\n"
+
+    await update.message.reply_text(text[:4000])
+
+# =========================
+# 07:00 DAILY CALENDAR
 # =========================
 def send_daily():
     msg = get_calendar()
@@ -109,7 +137,7 @@ def send_daily():
     async def run():
         for u in users:
             try:
-                await bot_app.bot.send_message(u, msg)
+                await bot_app.bot.send_message(chat_id=u, text=msg)
             except:
                 pass
 
@@ -120,58 +148,16 @@ scheduler.add_job(send_daily, "cron", hour=7, minute=0)
 scheduler.start()
 
 # =========================
-# CRYPTO ENGINE (HIGH IMPACT)
-# =========================
-def get_crypto_alerts():
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true"
-        data = requests.get(url, timeout=10).json()
-
-        alerts = []
-
-        for coin, info in data.items():
-            change = info.get("usd_24h_change", 0)
-
-            if abs(change) >= 2:
-                direction = "📈" if change > 0 else "📉"
-                alerts.append(f"{direction} {coin.upper()} {change:.2f}%")
-
-        if not alerts:
-            return None
-
-        return "₿ CRYPTO HIGH IMPACT\n\n" + "\n".join(alerts)
-
-    except:
-        return None
-
-def crypto_loop():
-    while True:
-        msg = get_crypto_alerts()
-
-        if msg:
-            users = get_users()
-
-            async def run():
-                for u in users:
-                    try:
-                        await bot_app.bot.send_message(u, msg)
-                    except:
-                        pass
-
-            asyncio.run(run())
-
-        time.sleep(300)
-
-# =========================
 # HANDLERS
 # =========================
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
 bot_app.add_handler(CommandHandler("broadcast", broadcast))
+bot_app.add_handler(CommandHandler("info", info))
 bot_app.add_handler(CallbackQueryHandler(button))
 
 # =========================
-# RUN BOT
+# BOT RUN
 # =========================
 async def run():
     await bot_app.initialize()
@@ -179,13 +165,15 @@ async def run():
     await bot_app.updater.start_polling()
     await asyncio.Event().wait()
 
+# =========================
+# FLASK
+# =========================
 @app.route("/")
 def home():
     return "BOT RUNNING"
 
 if __name__ == "__main__":
     threading.Thread(target=lambda: asyncio.run(run())).start()
-    threading.Thread(target=crypto_loop).start()
 
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
