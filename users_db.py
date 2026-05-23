@@ -1,11 +1,11 @@
 import json
 import os
 
-DB_PATH = "/data/users.json"
+DB_PATH = os.path.join(os.getcwd(), "data", "users.json")
 
 
 def init_db():
-    os.makedirs("/data", exist_ok=True)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
     if not os.path.exists(DB_PATH):
         with open(DB_PATH, "w") as f:
