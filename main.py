@@ -5,38 +5,39 @@ from flask import Flask
 from telegram.ext import Application
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from db import init, get_all
-from engine import build_brief
-from bot import register
+from users_db import init_db, get_users
 
 TOKEN = os.getenv("BOT_TOKEN")
 
 app = Flask(__name__)
 
-init()
+# init database
+init_db()
 
+# telegram app
 bot_app = Application.builder().token(TOKEN).build()
-register(bot_app)
 
 # =====================
-# DAILY SEND
+# DAILY TEST
 # =====================
 
 def send_daily():
-    msg = build_brief()
-    users = get_all()
+    users = get_users()
 
     async def send():
         for u in users:
             try:
-                await bot_app.bot.send_message(u, msg)
-            except:
-                pass
+                await bot_app.bot.send_message(
+                    chat_id=u,
+                    text="🕖 TEST DAILY MESSAGE"
+                )
+            except Exception as e:
+                print(e)
 
     asyncio.run(send())
 
 # =====================
-# SCHEDULER 07:00
+# SCHEDULER
 # =====================
 
 scheduler = BackgroundScheduler()
@@ -44,21 +45,22 @@ scheduler.add_job(send_daily, "cron", hour=7, minute=0)
 scheduler.start()
 
 # =====================
-# REAL BOT LOOP
+# BOT LOOP
 # =====================
 
 async def run():
     await bot_app.initialize()
     await bot_app.start()
+    await bot_app.updater.start_polling()
     await asyncio.Event().wait()
 
 # =====================
-# FLASK ROUTE
+# FLASK
 # =====================
 
 @app.route("/")
 def home():
-    return "PRO v1 RUNNING"
+    return "BOT RUNNING"
 
 # =====================
 # START
