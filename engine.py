@@ -1,57 +1,64 @@
+import os
 import requests
 
-def crypto():
-    url = "https://api.coingecko.com/api/v3/simple/price"
-    params = {
-        "ids": "bitcoin,ethereum",
-        "vs_currencies": "usd",
-        "include_24hr_change": "true"
-    }
+FINNHUB_KEY = os.getenv("FINNHUB_KEY")
+CRYPTOPANIC_KEY = os.getenv("CRYPTOPANIC_KEY")
 
-    r = requests.get(url, params=params).json()
-
-    btc = r["bitcoin"]["usd"]
-    btc_ch = r["bitcoin"]["usd_24h_change"]
-
-    eth = r["ethereum"]["usd"]
-    eth_ch = r["ethereum"]["usd_24h_change"]
-
-    def trend(x):
-        if x > 2:
-            return "📈 STRONG UP"
-        if x < -2:
-            return "📉 STRONG DOWN"
-        return "➡️ SIDEWAYS"
-
-    return f"""₿ CRYPTO
-BTC: ${btc} ({btc_ch:.2f}%) {trend(btc_ch)}
-ETH: ${eth} ({eth_ch:.2f}%) {trend(eth_ch)}
-"""
+seen = set()
 
 
-def macro():
-    events = [
-        "🔴 CPI Inflation",
-        "🔴 NFP Jobs Report",
-        "🔴 FOMC Meeting"
-    ]
-    return "🌍 MACRO\n" + "\n".join(events)
+def get_real_news():
+    alerts = []
 
+    # =========================
+    # CRYPTO NEWS (CRYPTOPANIC)
+    # =========================
+    try:
+        url = f"https://cryptopanic.com/api/v1/posts/?auth_token={CRYPTOPANIC_KEY}&public=true"
+        data = requests.get(url, timeout=10).json()
 
-def stocks():
-    return """📈 STOCKS
-NVDA +2.1%
-TSLA -1.3%
-AAPL +0.7%
-"""
+        for item in data.get("results", [])[:10]:
+            title = item.get("title", "")
+            key = f"crypto_{title}"
 
+            if key in seen:
+                continue
 
-def build_brief():
-    return f"""📊 MARKET INTELLIGENCE PRO v1
+            seen.add(key)
 
-{macro()}
+            if any(x in title.lower() for x in ["bitcoin", "ethereum", "crypto", "btc"]):
+                alerts.append(f"🚨 CRYPTO NEWS\n\n{title}")
 
-{crypto()}
+    except:
+        pass
 
-{stocks()}
-"""
+    # =========================
+    # STOCK + FOREX + MACRO (FINNHUB)
+    # =========================
+    try:
+        url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}"
+        data = requests.get(url, timeout=10).json()
+
+        for item in data[:10]:
+            headline = item.get("headline", "")
+            key = f"macro_{headline}"
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            # HIGH IMPACT FILTER
+            keywords = [
+                "fed", "inflation", "rate", "cpi", "nfp",
+                "usd", "recession", "stock", "crash",
+                "nasdaq", "dow", "earnings"
+            ]
+
+            if any(k in headline.lower() for k in keywords):
+                alerts.append(f"🚨 MACRO/STOCK NEWS\n\n{headline}")
+
+    except:
+        pass
+
+    return alerts
