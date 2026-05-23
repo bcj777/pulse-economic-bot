@@ -12,9 +12,9 @@ from telegram.ext import (
 
 from users_db import init_db, add_user, get_users
 
-# =========================
+# =====================
 # CONFIG
-# =========================
+# =====================
 TOKEN = os.getenv("BOT_TOKEN")
 FINNHUB_KEY = os.getenv("FINNHUB_KEY")
 ADMIN_ID = 2054196564
@@ -23,33 +23,31 @@ init_db()
 
 bot_app = Application.builder().token(TOKEN).build()
 
-# =========================
+# =====================
 # START
-# =========================
+# =====================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
     add_user(user_id)
 
     keyboard = [
-        [InlineKeyboardButton("📅 Calendar Today", callback_data="calendar")],
+        [InlineKeyboardButton("📅 Economic Calendar", callback_data="calendar")],
         [InlineKeyboardButton("📰 Market News", callback_data="news")]
     ]
 
     if user_id == ADMIN_ID:
-        keyboard.append(
-            [InlineKeyboardButton("⚙️ Admin Panel", callback_data="panel")]
-        )
+        keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="panel")])
 
     await update.message.reply_text(
         "━━━━━━━━━━━━━━\n"
-        "📊 TRADING INTELLIGENCE BOT\n"
+        "📊 TRADING BOT ACTIVE\n"
         "━━━━━━━━━━━━━━",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# =========================
+# =====================
 # CALENDAR (TODAY ONLY)
-# =========================
+# =====================
 def get_calendar():
     try:
         url = f"https://finnhub.io/api/v1/calendar/economic?token={FINNHUB_KEY}"
@@ -81,9 +79,9 @@ def get_calendar():
     except:
         return "Calendar error"
 
-# =========================
-# NEWS ENGINE (SIMPLE)
-# =========================
+# =====================
+# NEWS ENGINE
+# =====================
 seen = set()
 
 def get_news():
@@ -114,9 +112,9 @@ def get_news():
 
     return alerts
 
-# =========================
-# CALLBACKS
-# =========================
+# =====================
+# CALLBACK HANDLER
+# =====================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -146,14 +144,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(f"Users: {len(users)}")
 
     elif q.data == "admin_list" and user_id == ADMIN_ID:
-        await q.message.reply_text("/start /info /broadcast /calendar")
+        await q.message.reply_text("/start /info /broadcast")
 
     elif q.data == "admin_status" and user_id == ADMIN_ID:
         await q.message.reply_text("SYSTEM ONLINE")
 
-# =========================
+# =====================
 # INFO
-# =========================
+# =====================
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
         return
@@ -161,9 +159,9 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = get_users()
     await update.message.reply_text(f"Users: {len(users)}")
 
-# =========================
+# =====================
 # BROADCAST
-# =========================
+# =====================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
         return
@@ -182,16 +180,16 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"Sent: {sent}")
 
-# =========================
+# =====================
 # REGISTER HANDLERS
-# =========================
+# =====================
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("info", info))
 bot_app.add_handler(CommandHandler("broadcast", broadcast))
 bot_app.add_handler(CallbackQueryHandler(button))
 
-# =========================
-# RUN (IMPORTANT FIX)
-# =========================
+# =====================
+# RUN (CRITICAL FIX)
+# =====================
 if __name__ == "__main__":
     bot_app.run_polling()
