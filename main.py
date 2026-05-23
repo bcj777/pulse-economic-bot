@@ -12,9 +12,9 @@ from telegram.ext import (
 
 from users_db import init_db, add_user, get_users
 
-# =====================
+# =========================
 # CONFIG
-# =====================
+# =========================
 TOKEN = os.getenv("BOT_TOKEN")
 FINNHUB_KEY = os.getenv("FINNHUB_KEY")
 ADMIN_ID = 2054196564
@@ -23,31 +23,33 @@ init_db()
 
 bot_app = Application.builder().token(TOKEN).build()
 
-# =====================
+# =========================
 # START
-# =====================
+# =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
     add_user(user_id)
 
     keyboard = [
-        [InlineKeyboardButton("📅 Calendar", callback_data="calendar")],
-        [InlineKeyboardButton("📰 News", callback_data="news")]
+        [InlineKeyboardButton("📅 Calendar Today", callback_data="calendar")],
+        [InlineKeyboardButton("📰 Market News", callback_data="news")]
     ]
 
     if user_id == ADMIN_ID:
-        keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="panel")])
+        keyboard.append(
+            [InlineKeyboardButton("⚙️ Admin Panel", callback_data="panel")]
+        )
 
     await update.message.reply_text(
         "━━━━━━━━━━━━━━\n"
-        "📊 TRADING BOT ACTIVE\n"
+        "📊 TRADING INTELLIGENCE BOT\n"
         "━━━━━━━━━━━━━━",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# =====================
+# =========================
 # CALENDAR (TODAY ONLY)
-# =====================
+# =========================
 def get_calendar():
     try:
         url = f"https://finnhub.io/api/v1/calendar/economic?token={FINNHUB_KEY}"
@@ -64,13 +66,13 @@ def get_calendar():
         if not today_events:
             return "📅 No economic events today."
 
-        out = ["📅 TODAY EVENTS\n"]
+        out = ["📅 TODAY EVENTS\n━━━━━━━━━━━━━━"]
 
         for e in today_events:
             out.append(
-                f"{e.get('date')} {e.get('time')}\n"
-                f"{e.get('event')}\n"
-                f"{e.get('country')} | {e.get('impact')}\n"
+                f"🗓 {e.get('date')} {e.get('time')}\n"
+                f"📊 {e.get('event')}\n"
+                f"🌍 {e.get('country')} | 🔥 {e.get('impact')}\n"
                 "━━━━━━━━━━━━━━"
             )
 
@@ -79,9 +81,9 @@ def get_calendar():
     except:
         return "Calendar error"
 
-# =====================
-# NEWS (SIMPLE FILTER)
-# =====================
+# =========================
+# NEWS ENGINE (SIMPLE)
+# =========================
 seen = set()
 
 def get_news():
@@ -102,16 +104,19 @@ def get_news():
             seen.add(headline)
 
             if any(k in headline.lower() for k in keywords):
-                alerts.append("🚨 " + headline)
+                alerts.append(
+                    "🚨 MARKET NEWS\n━━━━━━━━━━━━━━\n\n"
+                    + headline
+                )
 
     except:
         pass
 
     return alerts
 
-# =====================
-# CALLBACKS (SINGLE HANDLER)
-# =====================
+# =========================
+# CALLBACKS
+# =========================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -122,7 +127,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(get_calendar())
 
     elif q.data == "news":
-        await q.message.reply_text("News engine running...")
+        await q.message.reply_text("📰 News engine active")
 
     elif q.data == "panel" and user_id == ADMIN_ID:
         keyboard = [
@@ -146,9 +151,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif q.data == "admin_status" and user_id == ADMIN_ID:
         await q.message.reply_text("SYSTEM ONLINE")
 
-# =====================
+# =========================
 # INFO
-# =====================
+# =========================
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
         return
@@ -156,9 +161,9 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = get_users()
     await update.message.reply_text(f"Users: {len(users)}")
 
-# =====================
+# =========================
 # BROADCAST
-# =====================
+# =========================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
         return
@@ -166,30 +171,27 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = " ".join(context.args)
     users = get_users()
 
+    sent = 0
+
     for u in users:
         try:
-            await bot_app.bot.send_message(u, f"📢 {msg}")
+            await bot_app.bot.send_message(chat_id=u, text=f"📢 {msg}")
+            sent += 1
         except:
             pass
 
-    await update.message.reply_text("Sent")
+    await update.message.reply_text(f"Sent: {sent}")
 
-# =====================
+# =========================
 # REGISTER HANDLERS
-# =====================
+# =========================
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("info", info))
 bot_app.add_handler(CommandHandler("broadcast", broadcast))
 bot_app.add_handler(CallbackQueryHandler(button))
 
-# =====================
+# =========================
 # RUN (IMPORTANT FIX)
-# =====================
-async def run():
-    await bot_app.initialize()
-    await bot_app.start()
-    await bot_app.run_polling()
-
+# =========================
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(run())
+    bot_app.run_polling()
