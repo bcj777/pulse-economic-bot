@@ -30,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "📊 Trading Bot ACTIV",
+        "📊 Trading Bot ACTIVE",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -67,15 +67,52 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("📰 News engine running...")
 
 # =========================
-# NEWS ENGINE (REAL LOGIC)
+# COMMANDS
+# =========================
+async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(get_calendar())
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ADMIN_ID:
+        return
+
+    msg = " ".join(context.args)
+    users = get_users()
+
+    sent = 0
+    for u in users:
+        try:
+            await bot_app.bot.send_message(chat_id=u, text=msg)
+            sent += 1
+        except:
+            pass
+
+    await update.message.reply_text(f"Sent to {sent} users")
+
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ADMIN_ID:
+        return
+
+    users = get_users()
+
+    text = f"👥 USERS: {len(users)}\n\n"
+
+    for u in users:
+        text += f"• {u}\n"
+
+    await update.message.reply_text(text[:4000])
+
+# =========================
+# NEWS ENGINE (REAL + SAFE)
 # =========================
 seen = set()
+engine_alive = True
+
 
 def get_news():
     alerts = []
 
     try:
-        # CRYPTO
         crypto = requests.get(
             "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true"
         ).json()
@@ -88,12 +125,8 @@ def get_news():
 
                 if key not in seen:
                     seen.add(key)
+                    alerts.append(f"🚨 CRYPTO HIGH IMPACT\n\n{coin.upper()} {change:.2f}%")
 
-                    alerts.append(
-                        f"🚨 CRYPTO HIGH IMPACT\n\n{coin.upper()} {change:.2f}%"
-                    )
-
-        # STOCKS
         stocks = requests.get(
             "https://query1.finance.yahoo.com/v7/finance/quote?symbols=AAPL,TSLA,NVDA"
         ).json()
@@ -107,43 +140,83 @@ def get_news():
 
                 if key not in seen:
                     seen.add(key)
-
-                    alerts.append(
-                        f"🚨 STOCK HIGH IMPACT\n\n{symbol} {change:.2f}%"
-                    )
+                    alerts.append(f"🚨 STOCK HIGH IMPACT\n\n{symbol} {change:.2f}%")
 
     except:
         pass
 
     return alerts
 
+
 # =========================
-# NEWS LOOP (24/7)
+# SAFE NEWS LOOP
 # =========================
-def news_loop():
+def safe_news_loop():
+    global engine_alive
+
     while True:
-        news = get_news()
+        try:
+            engine_alive = True
 
-        if news:
-            users = get_users()
+            news = get_news()
 
-            async def run():
-                for u in users:
-                    for n in news:
-                        try:
-                            await bot_app.bot.send_message(chat_id=u, text=n)
-                        except:
-                            pass
+            if news:
+                users = get_users()
 
-            asyncio.run(run())
+                async def run():
+                    for u in users:
+                        for n in news:
+                            try:
+                                await bot_app.bot.send_message(chat_id=u, text=n)
+                            except:
+                                pass
+
+                asyncio.run(run())
+
+        except:
+            engine_alive = False
 
         time.sleep(120)
+
+
+# =========================
+# ENGINE WATCHER
+# =========================
+def engine_watcher():
+    global engine_alive
+
+    while True:
+        if not engine_alive:
+            threading.Thread(target=safe_news_loop).start()
+            engine_alive = True
+
+        time.sleep(30)
+
+
+# =========================
+# TEST NEWS
+# =========================
+async def testnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    news = get_news()
+
+    if not news:
+        await update.message.reply_text("No signals now.")
+        return
+
+    for n in news:
+        await update.message.reply_text(n)
+
 
 # =========================
 # HANDLERS
 # =========================
 bot_app.add_handler(CommandHandler("start", start))
+bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
+bot_app.add_handler(CommandHandler("broadcast", broadcast))
+bot_app.add_handler(CommandHandler("info", info))
+bot_app.add_handler(CommandHandler("testnews", testnews))
 bot_app.add_handler(CallbackQueryHandler(button))
+
 
 # =========================
 # RUN BOT
@@ -154,13 +227,16 @@ async def run():
     await bot_app.updater.start_polling()
     await asyncio.Event().wait()
 
+
 @app.route("/")
 def home():
     return "BOT RUNNING"
 
+
 if __name__ == "__main__":
     threading.Thread(target=lambda: asyncio.run(run())).start()
-    threading.Thread(target=news_loop).start()
+    threading.Thread(target=safe_news_loop).start()
+    threading.Thread(target=engine_watcher).start()
 
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
