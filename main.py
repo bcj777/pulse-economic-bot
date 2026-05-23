@@ -10,18 +10,13 @@ from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQuer
 from users_db import init_db, add_user, get_users
 
 TOKEN = os.getenv("BOT_TOKEN")
+FINNHUB_KEY = os.getenv("FINNHUB_KEY")
 ADMIN_ID = 2054196564
 
 app = Flask(__name__)
 init_db()
 
 bot_app = Application.builder().token(TOKEN).build()
-
-# =========================
-# MARKDOWN HELP
-# =========================
-def fmt(text):
-    return text.replace("-", "\-").replace(".", "\.").replace("(", "\(").replace(")", "\)")
 
 # =========================
 # START
@@ -36,31 +31,86 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "*📊 Trading Bot PRO v3 ACTIVE*",
+        "*📊 Trading Intelligence Bot LIVE*",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# CALENDAR
+# ECONOMIC CALENDAR (REAL)
 # =========================
 def get_calendar():
     try:
-        data = requests.get(
-            "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
-            timeout=10
-        ).json()
+        url = f"https://finnhub.io/api/v1/calendar/economic?token={FINNHUB_KEY}"
+        data = requests.get(url, timeout=10).json()
+
+        events = data.get("economicCalendar", [])
 
         out = []
+        for e in events[:10]:
+            out.append(
+                f"📊 {e.get('event')} | {e.get('country')} | impact: {e.get('impact')}"
+            )
 
-        for e in data:
-            if str(e.get("impact", "")).lower() == "high":
-                out.append(f"🔴 {e.get('country')} - {e.get('title')}")
-
-        return "*📅 HIGH IMPACT CALENDAR*\n\n" + "\n".join(out[:10])
+        return "*📅 ECONOMIC CALENDAR*\n\n" + "\n".join(out)
 
     except:
         return "Calendar error"
+
+# =========================
+# NEWS ENGINE (REAL API)
+# =========================
+seen = set()
+
+def get_news():
+    alerts = []
+
+    try:
+        url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}"
+        data = requests.get(url, timeout=10).json()
+
+        for item in data[:10]:
+            headline = item.get("headline", "")
+
+            key = headline
+            if key in seen:
+                continue
+            seen.add(key)
+
+            keywords = [
+                "fed", "inflation", "rate", "cpi", "nfp",
+                "stock", "crash", "earnings", "crypto", "bitcoin"
+            ]
+
+            if any(k in headline.lower() for k in keywords):
+                alerts.append(f"🚨 NEWS IMPACT\n\n{headline}")
+
+    except:
+        pass
+
+    return alerts
+
+# =========================
+# NEWS LOOP (24/7)
+# =========================
+def news_loop():
+    while True:
+        news = get_news()
+
+        if news:
+            users = get_users()
+
+            async def send():
+                for u in users:
+                    for n in news:
+                        try:
+                            await bot_app.bot.send_message(chat_id=u, text=n)
+                        except:
+                            pass
+
+            asyncio.run(send())
+
+        time.sleep(120)
 
 # =========================
 # BUTTONS
@@ -72,18 +122,29 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if q.data == "calendar":
         await q.message.reply_text(get_calendar(), parse_mode="Markdown")
 
-    elif q.data == "news":
-        await q.message.reply_text("*📰 News engine active*", parse_mode="Markdown")
+    if q.data == "news":
+        await q.message.reply_text("📰 News engine active")
 
 # =========================
-# BROADCAST (FIXED)
+# INFO
 # =========================
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
         return
 
-    if not context.args:
-        await update.message.reply_text("*Usage:* /broadcast mesaj", parse_mode="Markdown")
+    users = get_users()
+    text = f"👥 USERS: {len(users)}\n\n"
+
+    for u in users[:50]:
+        text += f"{u}\n"
+
+    await update.message.reply_text(text)
+
+# =========================
+# BROADCAST
+# =========================
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ADMIN_ID:
         return
 
     msg = " ".join(context.args)
@@ -93,123 +154,15 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for u in users:
         try:
-            await bot_app.bot.send_message(
-                chat_id=u,
-                text=f"*📢 BROADCAST*\n\n_{msg}_",
-                parse_mode="Markdown"
-            )
+            await bot_app.bot.send_message(chat_id=u, text=f"📢 {msg}")
             sent += 1
         except:
             pass
 
-    await update.message.reply_text(f"*Sent to:* {sent}", parse_mode="Markdown")
+    await update.message.reply_text(f"Sent: {sent}")
 
 # =========================
-# INFO (FIXED)
-# =========================
-async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id != ADMIN_ID:
-        return
-
-    users = get_users()
-
-    text = "*👥 USERS LIST*\n\n"
-    text += f"*Total:* {len(users)}\n\n"
-
-    for u in users[:50]:
-        text += f"• `{u}`\n"
-
-    await update.message.reply_text(text, parse_mode="Markdown")
-
-# =========================
-# NEWS ENGINE V3 (REAL SCORING)
-# =========================
-seen = set()
-
-def get_news():
-    alerts = []
-
-    try:
-        crypto = requests.get(
-            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true"
-        ).json()
-
-        for coin, d in crypto.items():
-            change = d.get("usd_24h_change", 0)
-
-            score = abs(change)
-
-            if score >= 3:
-                key = f"crypto_{coin}"
-
-                if key not in seen:
-                    seen.add(key)
-
-                    alerts.append(
-                        f"*🚨 CRYPTO SIGNAL*\n\n_{coin.upper()}_\nChange: *{change:.2f}%*\nScore: *{score:.1f}*"
-                    )
-
-        stocks = requests.get(
-            "https://query1.finance.yahoo.com/v7/finance/quote?symbols=AAPL,TSLA,NVDA"
-        ).json()
-
-        for s in stocks.get("quoteResponse", {}).get("result", []):
-            change = s.get("regularMarketChangePercent", 0)
-            symbol = s.get("symbol")
-
-            score = abs(change)
-
-            if score >= 2:
-                key = f"stock_{symbol}"
-
-                if key not in seen:
-                    seen.add(key)
-
-                    alerts.append(
-                        f"*🚨 STOCK SIGNAL*\n\n_{symbol}_\nChange: *{change:.2f}%*\nScore: *{score:.1f}*"
-                    )
-
-    except:
-        pass
-
-    return alerts
-
-# =========================
-# SAFE LOOP
-# =========================
-def news_loop():
-    while True:
-        news = get_news()
-
-        if news:
-            users = get_users()
-
-            async def run():
-                for u in users:
-                    for n in news:
-                        try:
-                            await bot_app.bot.send_message(
-                                chat_id=u,
-                                text=n,
-                                parse_mode="Markdown"
-                            )
-                        except:
-                            pass
-
-            asyncio.run(run())
-
-        time.sleep(120)
-
-# =========================
-# HANDLERS (FIX IMPORTANT)
-# =========================
-bot_app.add_handler(CommandHandler("start", start))
-bot_app.add_handler(CommandHandler("broadcast", broadcast))
-bot_app.add_handler(CommandHandler("info", info))
-bot_app.add_handler(CallbackQueryHandler(button))
-
-# =========================
-# RUN
+# RUN BOT
 # =========================
 async def run():
     await bot_app.initialize()
@@ -219,7 +172,7 @@ async def run():
 
 @app.route("/")
 def home():
-    return "BOT RUNNING PRO V3"
+    return "BOT LIVE"
 
 if __name__ == "__main__":
     threading.Thread(target=lambda: asyncio.run(run())).start()
