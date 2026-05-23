@@ -1,38 +1,38 @@
 import os
-import asyncio
-import threading
-import time
 import requests
 from datetime import datetime
-from flask import Flask
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes
+)
 
 from users_db import init_db, add_user, get_users
 
-# =========================
+# =====================
 # CONFIG
-# =========================
+# =====================
 TOKEN = os.getenv("BOT_TOKEN")
 FINNHUB_KEY = os.getenv("FINNHUB_KEY")
 ADMIN_ID = 2054196564
 
-app = Flask(__name__)
 init_db()
 
 bot_app = Application.builder().token(TOKEN).build()
 
-# =========================
-# START (UI PREMIUM)
-# =========================
+# =====================
+# START
+# =====================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
     add_user(user_id)
 
     keyboard = [
-        [InlineKeyboardButton("📅 Economic Calendar", callback_data="calendar")],
-        [InlineKeyboardButton("📰 Market News", callback_data="news")]
+        [InlineKeyboardButton("📅 Calendar", callback_data="calendar")],
+        [InlineKeyboardButton("📰 News", callback_data="news")]
     ]
 
     if user_id == ADMIN_ID:
@@ -40,26 +40,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "━━━━━━━━━━━━━━\n"
-        "📊 *TRADING INTELLIGENCE SYSTEM*\n"
-        "━━━━━━━━━━━━━━\n\n"
-        "✔ Live market data\n"
-        "✔ Economic calendar\n"
-        "✔ News engine active\n\n"
-        "_Choose an option below:_",
-        parse_mode="Markdown",
+        "📊 TRADING BOT ACTIVE\n"
+        "━━━━━━━━━━━━━━",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# =========================
-# CALENDAR (ONLY TODAY)
-# =========================
+# =====================
+# CALENDAR (TODAY ONLY)
+# =====================
 def get_calendar():
     try:
         url = f"https://finnhub.io/api/v1/calendar/economic?token={FINNHUB_KEY}"
         data = requests.get(url, timeout=10).json()
 
         events = data.get("economicCalendar", [])
-
         today = datetime.utcnow().date().isoformat()
 
         today_events = [
@@ -68,38 +62,26 @@ def get_calendar():
         ]
 
         if not today_events:
-            return (
-                "━━━━━━━━━━━━━━\n"
-                "📅 *ECONOMIC CALENDAR*\n"
-                "━━━━━━━━━━━━━━\n\n"
-                "ℹ️ No events today.\n"
-                "_Market is quiet._"
-            )
+            return "📅 No economic events today."
 
-        out = [
-            "━━━━━━━━━━━━━━",
-            "📅 *TODAY ECONOMIC EVENTS*",
-            "━━━━━━━━━━━━━━\n"
-        ]
+        out = ["📅 TODAY EVENTS\n"]
 
-        for e in today_events[:10]:
+        for e in today_events:
             out.append(
-                f"🗓 {e.get('date', '-')}\n"
-                f"⏰ {e.get('time', '-')}\n"
-                f"📊 {e.get('event', '-')}\n"
-                f"🌍 {e.get('country', '-')}\n"
-                f"🔥 Impact: {e.get('impact', '-')}\n"
+                f"{e.get('date')} {e.get('time')}\n"
+                f"{e.get('event')}\n"
+                f"{e.get('country')} | {e.get('impact')}\n"
                 "━━━━━━━━━━━━━━"
             )
 
         return "\n".join(out)
 
     except:
-        return "⚠️ Calendar error"
+        return "Calendar error"
 
-# =========================
-# NEWS ENGINE
-# =========================
+# =====================
+# NEWS (SIMPLE FILTER)
+# =====================
 seen = set()
 
 def get_news():
@@ -120,47 +102,16 @@ def get_news():
             seen.add(headline)
 
             if any(k in headline.lower() for k in keywords):
-                alerts.append(
-                    "━━━━━━━━━━━━━━\n"
-                    "🚨 *MARKET NEWS*\n"
-                    "━━━━━━━━━━━━━━\n\n"
-                    f"{headline}"
-                )
+                alerts.append("🚨 " + headline)
 
     except:
         pass
 
     return alerts
 
-# =========================
-# NEWS LOOP
-# =========================
-def news_loop():
-    while True:
-        news = get_news()
-
-        if news:
-            users = get_users()
-
-            async def send():
-                for u in users:
-                    for n in news:
-                        try:
-                            await bot_app.bot.send_message(
-                                chat_id=u,
-                                text=n,
-                                parse_mode="Markdown"
-                            )
-                        except:
-                            pass
-
-            asyncio.run(send())
-
-        time.sleep(120)
-
-# =========================
-# CALLBACKS (SINGLE CLEAN HANDLER)
-# =========================
+# =====================
+# CALLBACKS (SINGLE HANDLER)
+# =====================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -168,10 +119,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = q.from_user.id
 
     if q.data == "calendar":
-        await q.message.reply_text(get_calendar(), parse_mode="Markdown")
+        await q.message.reply_text(get_calendar())
 
     elif q.data == "news":
-        await q.message.reply_text("📰 News engine active")
+        await q.message.reply_text("News engine running...")
 
     elif q.data == "panel" and user_id == ADMIN_ID:
         keyboard = [
@@ -181,81 +132,64 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         await q.message.reply_text(
-            "━━━━━━━━━━━━━━\n"
-            "⚙️ *ADMIN PANEL*\n"
-            "━━━━━━━━━━━━━━",
-            parse_mode="Markdown",
+            "⚙️ ADMIN PANEL",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
     elif q.data == "admin_users" and user_id == ADMIN_ID:
         users = get_users()
-        await q.message.reply_text(f"👥 Users: {len(users)}")
+        await q.message.reply_text(f"Users: {len(users)}")
 
     elif q.data == "admin_list" and user_id == ADMIN_ID:
-        await q.message.reply_text(
-            "/start\n/info\n/broadcast\n/calendar",
-            parse_mode="Markdown"
-        )
+        await q.message.reply_text("/start /info /broadcast /calendar")
 
     elif q.data == "admin_status" and user_id == ADMIN_ID:
-        await q.message.reply_text("🟢 SYSTEM ONLINE")
+        await q.message.reply_text("SYSTEM ONLINE")
 
-# =========================
-# COMMANDS
-# =========================
+# =====================
+# INFO
+# =====================
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
         return
 
     users = get_users()
+    await update.message.reply_text(f"Users: {len(users)}")
 
-    text = "👥 USERS LIST\n━━━━━━━━━━━━━━\n"
-    text += "\n".join(str(u) for u in users[:50])
-
-    await update.message.reply_text(text)
-
+# =====================
+# BROADCAST
+# =====================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_ID:
         return
 
     msg = " ".join(context.args)
-
     users = get_users()
-    sent = 0
 
     for u in users:
         try:
-            await bot_app.bot.send_message(chat_id=u, text=f"📢 {msg}")
-            sent += 1
+            await bot_app.bot.send_message(u, f"📢 {msg}")
         except:
             pass
 
-    await update.message.reply_text(f"Sent: {sent}")
+    await update.message.reply_text("Sent")
 
-# =========================
-# REGISTER
-# =========================
+# =====================
+# REGISTER HANDLERS
+# =====================
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("info", info))
 bot_app.add_handler(CommandHandler("broadcast", broadcast))
 bot_app.add_handler(CallbackQueryHandler(button))
 
-# =========================
-# RUN BOT (FIXED)
-# =========================
+# =====================
+# RUN (IMPORTANT FIX)
+# =====================
 async def run():
     await bot_app.initialize()
     await bot_app.start()
     await bot_app.run_polling()
 
-@app.route("/")
-def home():
-    return "BOT ACTIVE"
-
 if __name__ == "__main__":
-    threading.Thread(target=lambda: asyncio.run(run())).start()
-    threading.Thread(target=news_loop).start()
-
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    import asyncio
+    asyncio.run(run())
