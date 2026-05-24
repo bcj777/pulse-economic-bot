@@ -311,9 +311,6 @@ async def start(
 # =====================
 # CALLBACKS
 # =====================
-# =====================
-# CALLBACKS
-# =====================
 async def buttons(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -332,41 +329,42 @@ async def buttons(
     # NEWS
     elif q.data == "news":
 
-    recent, _ = fetch_news()
+        recent, _ = fetch_news()
 
-    if not recent:
+        if not recent:
 
-        await q.message.reply_text(
-            "📰 No recent market news."
-        )
+            await q.message.reply_text(
+                "📰 No recent market news."
+            )
 
-    else:
+        else:
 
-        for n in recent:
+            for n in recent:
 
-            try:
+                try:
 
-                if n["image"]:
+                    if n["image"]:
 
-                    await q.message.reply_photo(
-                        photo=n["image"],
-                        caption=n["caption"],
-                        parse_mode="HTML"
-                    )
+                        await q.message.reply_photo(
+                            photo=n["image"],
+                            caption=n["caption"],
+                            parse_mode="HTML"
+                        )
 
-                else:
+                    else:
+
+                        await q.message.reply_text(
+                            n["caption"],
+                            parse_mode="HTML"
+                        )
+
+                except:
 
                     await q.message.reply_text(
                         n["caption"],
                         parse_mode="HTML"
                     )
 
-            except:
-
-                await q.message.reply_text(
-                    n["caption"],
-                    parse_mode="HTML"
-                )
     # ADMIN
     elif q.data == "admin":
 
@@ -379,7 +377,6 @@ async def buttons(
                 f"👥 Users: {len(users)}",
                 parse_mode="HTML"
             )
-
 # =====================
 # ADMIN COMMANDS
 # =====================
