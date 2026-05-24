@@ -14,18 +14,19 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 # =====================
 TOKEN = os.getenv("BOT_TOKEN")
 FINNHUB_KEY = os.getenv("FINNHUB_KEY")
-ADMIN_ID = 2054196564
+
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 DB_FILE = "users.json"
 
 # =====================
-# FLASK
+# FLASK (Render keep-alive)
 # =====================
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "BOT RUNNING OK"
+    return "BOT RUNNING"
 
 # =====================
 # USERS DB
@@ -73,7 +74,7 @@ def classify(text):
     return "🟠 MACRO"
 
 # =====================
-# SENTIMENT ENGINE
+# SENTIMENT (simplu)
 # =====================
 def sentiment(text):
     t = text.lower()
@@ -92,17 +93,16 @@ def sentiment(text):
             score -= 1
 
     if score >= 2:
-        return "🟢 BULLISH", score
+        return "🟢 BULLISH"
     elif score <= -2:
-        return "🔴 BEARISH", score
+        return "🔴 BEARISH"
     else:
-        return "⚪ NEUTRAL", score
+        return "⚪ NEUTRAL"
 
 # =====================
-# NEWS API (48H FILTER FIX)
+# NEWS API
 # =====================
 def fetch_news():
-
     try:
         url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}"
         data = requests.get(url, timeout=10).json()
@@ -124,12 +124,12 @@ def fetch_news():
             if not title:
                 continue
 
-            # 🔥 FILTER 48H ONLY
+            # 48h filter
             if ts and (now - ts > last_48h):
                 continue
 
             cat = classify(title + summary)
-            sent, s_score = sentiment(title + summary)
+            sent = sentiment(title + summary)
 
             msg = {
                 "text":
@@ -137,7 +137,7 @@ def fetch_news():
                     f"{sent}\n\n"
                     f"<b>{title}</b>\n\n"
                     f"{summary[:250]}\n\n"
-                    f"🔗 <a href='{link}'>Read full article</a>",
+                    f"🔗 {link}",
                 "image": image,
                 "title": title
             }
@@ -154,10 +154,9 @@ def fetch_news():
         return [], []
 
 # =====================
-# CALENDAR (TODAY ONLY)
+# CALENDAR
 # =====================
 def fetch_calendar():
-
     try:
         today = datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -177,13 +176,13 @@ def fetch_calendar():
                 continue
 
             out.append(
-                f"📅 <b>ECONOMIC EVENT</b>\n\n"
+                f"📅 ECONOMIC EVENT\n\n"
                 f"🌍 {e.get('country')}\n"
                 f"⏰ {e.get('time')}\n"
                 f"📊 {e.get('event')}"
             )
 
-        return "\n\n━━━━━━━━━━\n\n".join(out) if out else "No events today."
+        return "\n\n---\n\n".join(out) if out else "No events today."
 
     except:
         return "Calendar error"
@@ -198,16 +197,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     kb = [
         [InlineKeyboardButton("📰 News", callback_data="news")],
-        [InlineKeyboardButton("📅 Calendar", callback_data="calendar")]
+        [InlineKeyboardButton("📅 Calendar", callback_data="calendar")],
+        [InlineKeyboardButton("⚙️ Admin", callback_data="admin")]
     ]
 
-    if uid == ADMIN_ID:
-        kb.append([InlineKeyboardButton("⚙️ Admin", callback_data="admin")])
-
     await update.message.reply_text(
-        "🚀 BOT ACTIVE",
-        reply_markup=InlineKeyboardMarkup(kb),
-        parse_mode="HTML"
+        f"BOT ACTIVE\nYour ID: {uid}",
+        reply_markup=InlineKeyboardMarkup(kb)
     )
 
 # =====================
@@ -217,6 +213,8 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     q = update.callback_query
     await q.answer()
+
+    print("DEBUG callback:", q.data, q.from_user.id)
 
     if q.data == "news":
 
@@ -231,27 +229,20 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif q.data == "calendar":
 
-        await q.message.reply_text(fetch_calendar(), parse_mode="HTML")
+        await q.message.reply_text(fetch_calendar())
+
+    elif q.data == "admin":
+
+        if q.from_user.id != ADMIN_ID:
+            await q.message.reply_text("⛔ Not admin")
+            return
+
+        await q.message.reply_text(
+            f"⚙️ ADMIN PANEL\nUsers: {len(get_users())}"
+        )
 
 # =====================
-# COMMANDS
-# =====================
-async def news_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    news, _ = fetch_news()
-
-    for n in news:
-        if n["image"]:
-            await update.message.reply_photo(n["image"], caption=n["text"], parse_mode="HTML")
-        else:
-            await update.message.reply_text(n["text"], parse_mode="HTML")
-
-async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    await update.message.reply_text(fetch_calendar(), parse_mode="HTML")
-
-# =====================
-# AUTO ALERTS
+# AUTO LOOP
 # =====================
 def auto_loop():
 
@@ -283,19 +274,17 @@ def auto_loop():
 bot_app = Application.builder().token(TOKEN).build()
 
 bot_app.add_handler(CommandHandler("start", start))
-bot_app.add_handler(CommandHandler("news", news_cmd))
-bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
 bot_app.add_handler(CallbackQueryHandler(buttons))
 
 # =====================
-# FLASK THREAD
+# WEB SERVER
 # =====================
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
 # =====================
-# START SYSTEM
+# RUN
 # =====================
 if __name__ == "__main__":
 
