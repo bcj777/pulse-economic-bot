@@ -25,10 +25,10 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "BOT ACTIVE"
+    return "BOT RUNNING OK"
 
 # =====================
-# DB
+# USERS DB
 # =====================
 def load_users():
     if not os.path.exists(DB_FILE):
@@ -73,7 +73,7 @@ def classify(text):
     return "🟠 MACRO"
 
 # =====================
-# SENTIMENT
+# SENTIMENT ENGINE
 # =====================
 def sentiment(text):
     t = text.lower()
@@ -99,9 +99,10 @@ def sentiment(text):
         return "⚪ NEUTRAL", score
 
 # =====================
-# NEWS API
+# NEWS API (48H FILTER FIX)
 # =====================
 def fetch_news():
+
     try:
         url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}"
         data = requests.get(url, timeout=10).json()
@@ -109,14 +110,22 @@ def fetch_news():
         news_list = []
         alerts = []
 
-        for n in data[:20]:
+        now = time.time()
+        last_48h = 48 * 3600
+
+        for n in data:
 
             title = n.get("headline","")
             summary = n.get("summary","")
             image = n.get("image","")
             link = n.get("url","")
+            ts = n.get("datetime", 0)
 
             if not title:
+                continue
+
+            # 🔥 FILTER 48H ONLY
+            if ts and (now - ts > last_48h):
                 continue
 
             cat = classify(title + summary)
@@ -130,8 +139,7 @@ def fetch_news():
                     f"{summary[:250]}\n\n"
                     f"🔗 <a href='{link}'>Read full article</a>",
                 "image": image,
-                "title": title,
-                "link": link
+                "title": title
             }
 
             news_list.append(msg)
@@ -146,9 +154,10 @@ def fetch_news():
         return [], []
 
 # =====================
-# CALENDAR
+# CALENDAR (TODAY ONLY)
 # =====================
 def fetch_calendar():
+
     try:
         today = datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -224,10 +233,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await q.message.reply_text(fetch_calendar(), parse_mode="HTML")
 
-    elif q.data == "admin" and q.from_user.id == ADMIN_ID:
-
-        await q.message.reply_text(f"Users: {len(get_users())}")
-
 # =====================
 # COMMANDS
 # =====================
@@ -236,7 +241,6 @@ async def news_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     news, _ = fetch_news()
 
     for n in news:
-
         if n["image"]:
             await update.message.reply_photo(n["image"], caption=n["text"], parse_mode="HTML")
         else:
@@ -247,7 +251,7 @@ async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(fetch_calendar(), parse_mode="HTML")
 
 # =====================
-# AUTO LOOP
+# AUTO ALERTS
 # =====================
 def auto_loop():
 
@@ -274,7 +278,7 @@ def auto_loop():
             time.sleep(60)
 
 # =====================
-# BOT
+# BOT INIT
 # =====================
 bot_app = Application.builder().token(TOKEN).build()
 
@@ -284,14 +288,14 @@ bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
 bot_app.add_handler(CallbackQueryHandler(buttons))
 
 # =====================
-# WEB SERVER
+# FLASK THREAD
 # =====================
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
 # =====================
-# START
+# START SYSTEM
 # =====================
 if __name__ == "__main__":
 
