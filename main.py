@@ -21,11 +21,11 @@ DB_FILE = "users.json"
 # =====================
 # FLASK
 # =====================
-web = Flask(__name__)
+app = Flask(__name__)
 
-@web.route("/")
+@app.route("/")
 def home():
-    return "PRO TRADING BOT RUNNING"
+    return "BOT RUNNING"
 
 # =====================
 # DB
@@ -51,7 +51,7 @@ def get_users():
     return load_users()
 
 # =====================
-# NEWS MEMORY
+# MEMORY
 # =====================
 seen_news = set()
 
@@ -64,7 +64,7 @@ def classify(text):
     if any(x in t for x in ["btc","crypto","bitcoin","eth","ethereum"]):
         return "🟣 CRYPTO"
 
-    if any(x in t for x in ["usd","eur","forex","fed","cpi","inflation","rate"]):
+    if any(x in t for x in ["forex","usd","eur","fed","cpi","inflation","rate"]):
         return "🟢 FOREX"
 
     if any(x in t for x in ["stock","nasdaq","dow","apple","tesla","nvidia","earnings"]):
@@ -73,20 +73,13 @@ def classify(text):
     return "🟠 MACRO"
 
 # =====================
-# SENTIMENT ENGINE
+# SENTIMENT
 # =====================
 def sentiment(text):
     t = text.lower()
 
-    bullish = [
-        "rise","rally","surge","growth","beat",
-        "strong","record","gain","up","optimism"
-    ]
-
-    bearish = [
-        "fall","drop","crash","recession","fear",
-        "weak","decline","loss","down","plunge"
-    ]
+    bullish = ["rise","rally","surge","growth","beat","strong","gain","up"]
+    bearish = ["fall","drop","crash","weak","loss","down","recession"]
 
     score = 0
 
@@ -106,14 +99,6 @@ def sentiment(text):
         return "⚪ NEUTRAL", score
 
 # =====================
-# SCORE ENGINE
-# =====================
-def score(text):
-    t = text.lower()
-    keys = ["fed","cpi","inflation","btc","bitcoin","rate","recession","stocks","crypto"]
-    return sum(2 for k in keys if k in t)
-
-# =====================
 # NEWS API
 # =====================
 def fetch_news():
@@ -121,7 +106,7 @@ def fetch_news():
         url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}"
         data = requests.get(url, timeout=10).json()
 
-        news_list = []
+        news = []
         alerts = []
 
         for n in data[:20]:
@@ -135,26 +120,24 @@ def fetch_news():
 
             cat = classify(title + summary)
             sent, s_score = sentiment(title + summary)
-            base_score = score(title + summary)
 
             msg = {
                 "text":
                     f"{cat}\n"
-                    f"{sent} | Score {s_score + base_score}\n\n"
+                    f"{sent}\n\n"
                     f"<b>{title}</b>\n\n"
                     f"{summary[:250]}",
                 "image": image,
-                "title": title,
-                "score": base_score
+                "title": title
             }
 
-            news_list.append(msg)
+            news.append(msg)
 
-            if base_score >= 2 and title not in seen_news:
+            if title not in seen_news:
                 seen_news.add(title)
                 alerts.append(msg)
 
-        return news_list, alerts
+        return news, alerts
 
     except:
         return [], []
@@ -188,7 +171,7 @@ def fetch_calendar():
                 f"📊 {e.get('event')}"
             )
 
-        return "\n\n━━━━━━━━━━\n\n".join(out) if out else "📅 No events today."
+        return "\n\n━━━━━━━━━━\n\n".join(out) if out else "No events today."
 
     except:
         return "Calendar error"
@@ -210,9 +193,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb.append([InlineKeyboardButton("⚙️ Admin", callback_data="admin")])
 
     await update.message.reply_text(
-        "🚀 <b>PRO TRADING ENGINE ACTIVE</b>",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(kb)
+        "🚀 BOT ACTIVE",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode="HTML"
     )
 
 # =====================
@@ -230,16 +213,9 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for n in news:
 
             if n["image"]:
-                await q.message.reply_photo(
-                    n["image"],
-                    caption=n["text"],
-                    parse_mode="HTML"
-                )
+                await q.message.reply_photo(n["image"], caption=n["text"], parse_mode="HTML")
             else:
-                await q.message.reply_text(
-                    n["text"],
-                    parse_mode="HTML"
-                )
+                await q.message.reply_text(n["text"], parse_mode="HTML")
 
     elif q.data == "calendar":
 
@@ -247,43 +223,33 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif q.data == "admin" and q.from_user.id == ADMIN_ID:
 
-        await q.message.reply_text(
-            f"👥 USERS: {len(get_users())}\n"
-            f"/info /broadcast /list"
-        )
+        await q.message.reply_text(f"Users: {len(get_users())}")
 
 # =====================
-# ADMIN
+# COMMANDS
 # =====================
-async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-    await update.message.reply_text(f"Users: {len(get_users())}")
+async def news_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-    await update.message.reply_text("/info /broadcast /list")
+    news, _ = fetch_news()
 
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    for n in news:
 
-    if update.effective_user.id != ADMIN_ID:
-        return
+        if n["image"]:
+            await update.message.reply_photo(n["image"], caption=n["text"], parse_mode="HTML")
+        else:
+            await update.message.reply_text(n["text"], parse_mode="HTML")
 
-    msg = " ".join(context.args)
+async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    for u in get_users():
-        try:
-            await context.bot.send_message(u, f"📢 {msg}")
-        except:
-            pass
+    await update.message.reply_text(fetch_calendar(), parse_mode="HTML")
 
 # =====================
-# AUTO LOOP
+# AUTO ALERTS
 # =====================
 def auto_loop():
 
     while True:
+
         try:
 
             _, alerts = fetch_news()
@@ -293,10 +259,12 @@ def auto_loop():
                 for u in get_users():
 
                     try:
+
                         if a["image"]:
                             bot_app.bot.send_photo(u, a["image"], a["text"], parse_mode="HTML")
                         else:
                             bot_app.bot.send_message(u, a["text"], parse_mode="HTML")
+
                     except:
                         pass
 
@@ -311,9 +279,8 @@ def auto_loop():
 bot_app = Application.builder().token(TOKEN).build()
 
 bot_app.add_handler(CommandHandler("start", start))
-bot_app.add_handler(CommandHandler("info", info))
-bot_app.add_handler(CommandHandler("list", list_cmd))
-bot_app.add_handler(CommandHandler("broadcast", broadcast))
+bot_app.add_handler(CommandHandler("news", news_cmd))
+bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
 bot_app.add_handler(CallbackQueryHandler(buttons))
 
 # =====================
@@ -321,7 +288,7 @@ bot_app.add_handler(CallbackQueryHandler(buttons))
 # =====================
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    web.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
 
 # =====================
 # START
