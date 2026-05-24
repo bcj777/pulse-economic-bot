@@ -80,35 +80,81 @@ def score(text):
 # =====================
 # NEWS ENGINE
 # =====================
+from datetime import datetime, timezone
+
+
 def fetch_news():
+
     try:
         url = (
             f"https://finnhub.io/api/v1/news"
             f"?category=general&token={FINNHUB_KEY}"
         )
 
-        data = requests.get(url, timeout=10).json()
+        data = requests.get(
+            url,
+            timeout=10
+        ).json()
 
-        alerts = []
+        recent_news = []
+        auto_alerts = []
 
-        for n in data[:15]:
-            title = n.get("headline", "")
+        now = datetime.now(
+            timezone.utc
+        ).timestamp()
 
-            if title in seen_news:
+        for n in data:
+
+            title = n.get(
+                "headline",
+                ""
+            )
+
+            summary = n.get(
+                "summary",
+                ""
+            )
+
+            ts = n.get(
+                "datetime",
+                0
+            )
+
+            # 24h filter
+            if now - ts > 86400:
                 continue
 
-            seen_news.add(title)
+            text = (
+                title + " " + summary
+            )
 
-            if score(title) >= 3:
-                alerts.append(
-                    f"🚨 <b>HIGH IMPACT NEWS</b>\n\n{title}"
+            s = score(text)
+
+            if s >= 3:
+
+                msg = (
+                    f"📰 <b>HIGH IMPACT</b>\n\n"
+                    f"{title}"
                 )
 
-        return alerts
+                # NEWS BUTTON LIST
+                recent_news.append(msg)
+
+                # AUTO ALERTS
+                if title not in seen_news:
+                    seen_news.add(title)
+                    auto_alerts.append(msg)
+
+        # limit la 10
+        recent_news = recent_news[:10]
+
+        return (
+            recent_news,
+            auto_alerts
+        )
 
     except:
-        return []
-
+        return [], []
 
 # =====================
 # CALENDAR ENGINE
@@ -233,19 +279,25 @@ async def buttons(
 
     # NEWS
     elif q.data == "news":
-        news = fetch_news()
+        _, news = fetch_news() 
 
-        if not news:
-            await q.message.reply_text(
-                "📰 <b>No high impact news.</b>",
-                parse_mode="HTML"
-            )
-        else:
-            await q.message.reply_text(
-                "\n\n".join(news),
-                parse_mode="HTML"
-            )
+        elif q.data == "news":
 
+    recent, _ = fetch_news()
+
+    if not recent:
+        await q.message.reply_text(
+            "📰 <b>No recent high impact news.</b>",
+            parse_mode="HTML"
+        )
+
+    else:
+        await q.message.reply_text(
+            "\n\n━━━━━━━━━━\n\n".join(
+                recent
+            ),
+            parse_mode="HTML"
+        )
     # ADMIN
     elif q.data == "admin":
         if q.from_user.id == ADMIN_ID:
