@@ -83,8 +83,8 @@ def classify(text):
 def sentiment(text):
     t = text.lower()
 
-    bull = ["rise","rally","surge","growth","beat","strong","gain","up"]
-    bear = ["fall","drop","crash","weak","loss","down","recession"]
+    bull = ["rise","rally","surge","growth","strong","gain","up"]
+    bear = ["fall","drop","crash","weak","loss","down"]
 
     score = 0
 
@@ -141,8 +141,7 @@ def fetch_news():
                     f"<b>{title}</b>\n\n"
                     f"{summary[:250]}\n\n"
                     f"🔗 {link}",
-                "image": image,
-                "title": title
+                "image": image
             }
 
             news_list.append(msg)
@@ -157,7 +156,7 @@ def fetch_news():
         return [], []
 
 # =====================
-# CALENDAR (TODAY ONLY)
+# CALENDAR
 # =====================
 def fetch_calendar():
 
@@ -202,11 +201,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [InlineKeyboardButton("📰 News", callback_data="news")],
         [InlineKeyboardButton("📅 Calendar", callback_data="calendar")],
-        [InlineKeyboardButton("⚙️ Admin", callback_data="admin")]
+        [InlineKeyboardButton("⚙️ Admin Panel", callback_data="panel")]
     ]
 
     await update.message.reply_text(
         "🚀 BOT ACTIVE",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+# =====================
+# PANEL (ADMIN DASHBOARD)
+# =====================
+async def panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    uid = update.effective_user.id
+
+    if uid != ADMIN_ID:
+        await update.message.reply_text("⛔ Not admin")
+        return
+
+    kb = [
+        [InlineKeyboardButton("👥 List Users", callback_data="list")],
+        [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast")]
+    ]
+
+    await update.message.reply_text(
+        f"⚙️ ADMIN PANEL\nUsers: {len(get_users())}",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
@@ -218,12 +238,13 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
 
+    uid = q.from_user.id
+
     if q.data == "news":
 
         news, _ = fetch_news()
 
         for n in news:
-
             if n["image"]:
                 await q.message.reply_photo(n["image"], caption=n["text"], parse_mode="HTML")
             else:
@@ -233,15 +254,24 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await q.message.reply_text(fetch_calendar())
 
-    elif q.data == "admin":
+    elif q.data == "panel":
 
-        if q.from_user.id != ADMIN_ID:
-            await q.message.reply_text("⛔ NOT ADMIN")
+        await panel(update, context)
+
+    elif q.data == "list":
+
+        if uid != ADMIN_ID:
             return
 
-        await q.message.reply_text(
-            f"⚙️ ADMIN PANEL\nUsers: {len(get_users())}"
-        )
+        users = get_users()
+        await q.message.reply_text("👥 USERS:\n" + "\n".join(map(str, users[:50])))
+
+    elif q.data == "broadcast":
+
+        if uid != ADMIN_ID:
+            return
+
+        await q.message.reply_text("Use: /broadcast message")
 
 # =====================
 # COMMANDS
@@ -260,10 +290,29 @@ async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(fetch_calendar())
 
+async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    msg = " ".join(context.args)
+
+    if not msg:
+        await update.message.reply_text("Usage: /broadcast message")
+        return
+
+    for u in get_users():
+        try:
+            bot_app.bot.send_message(u, f"📢 {msg}")
+        except:
+            pass
+
+    await update.message.reply_text("Sent.")
+
 # =====================
 # AUTO NEWS LOOP
 # =====================
-def auto_news_loop():
+def auto_loop():
 
     while True:
         try:
@@ -271,9 +320,7 @@ def auto_news_loop():
             _, alerts = fetch_news()
 
             for a in alerts:
-
                 for u in get_users():
-
                     try:
                         if a["image"]:
                             bot_app.bot.send_photo(u, a["image"], a["text"], parse_mode="HTML")
@@ -288,16 +335,15 @@ def auto_news_loop():
             time.sleep(60)
 
 # =====================
-# SCHEDULER (7AM WEEKDAYS)
+# SCHEDULER 7AM
 # =====================
-def send_morning_calendar():
+def send_morning():
 
-    users = get_users()
     msg = fetch_calendar()
 
-    for u in users:
+    for u in get_users():
         try:
-            bot_app.bot.send_message(u, "🌅 DAILY ECONOMIC CALENDAR\n\n" + msg)
+            bot_app.bot.send_message(u, "🌅 DAILY CALENDAR\n\n" + msg)
         except:
             pass
 
@@ -306,7 +352,7 @@ def start_scheduler():
     scheduler = BackgroundScheduler(timezone=TZ)
 
     scheduler.add_job(
-        send_morning_calendar,
+        send_morning,
         "cron",
         day_of_week="mon-fri",
         hour=7,
@@ -323,14 +369,18 @@ bot_app = Application.builder().token(TOKEN).build()
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("news", news_cmd))
 bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
+bot_app.add_handler(CommandHandler("panel", panel))
+bot_app.add_handler(CommandHandler("broadcast", broadcast_cmd))
 bot_app.add_handler(CallbackQueryHandler(buttons))
 
 # =====================
-# FLASK THREAD
+# WEB
 # =====================
+app_flask = app
+
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app_flask.run(host="0.0.0.0", port=port)
 
 # =====================
 # START
@@ -338,7 +388,7 @@ def run_web():
 if __name__ == "__main__":
 
     threading.Thread(target=run_web, daemon=True).start()
-    threading.Thread(target=auto_news_loop, daemon=True).start()
+    threading.Thread(target=auto_loop, daemon=True).start()
 
     start_scheduler()
 
