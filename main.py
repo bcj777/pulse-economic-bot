@@ -19,16 +19,16 @@ ADMIN_ID = 2054196564
 DB_FILE = "users.json"
 
 # =====================
-# FLASK SERVER
+# FLASK
 # =====================
 web = Flask(__name__)
 
 @web.route("/")
 def home():
-    return "TRADING BOT RUNNING"
+    return "PRO TRADING BOT RUNNING"
 
 # =====================
-# DATABASE
+# DB
 # =====================
 def load_users():
     if not os.path.exists(DB_FILE):
@@ -41,10 +41,10 @@ def load_users():
 def save_users(users):
     json.dump(users, open(DB_FILE, "w"))
 
-def add_user(user_id):
+def add_user(uid):
     users = load_users()
-    if user_id not in users:
-        users.append(user_id)
+    if uid not in users:
+        users.append(uid)
         save_users(users)
 
 def get_users():
@@ -56,7 +56,7 @@ def get_users():
 seen_news = set()
 
 # =====================
-# CLASSIFY MARKET
+# CLASSIFY
 # =====================
 def classify(text):
     t = text.lower()
@@ -64,13 +64,46 @@ def classify(text):
     if any(x in t for x in ["btc","crypto","bitcoin","eth","ethereum"]):
         return "🟣 CRYPTO"
 
-    if any(x in t for x in ["forex","usd","eur","fed","cpi","inflation","rate"]):
+    if any(x in t for x in ["usd","eur","forex","fed","cpi","inflation","rate"]):
         return "🟢 FOREX"
 
     if any(x in t for x in ["stock","nasdaq","dow","apple","tesla","nvidia","earnings"]):
         return "🔵 STOCK"
 
     return "🟠 MACRO"
+
+# =====================
+# SENTIMENT ENGINE
+# =====================
+def sentiment(text):
+    t = text.lower()
+
+    bullish = [
+        "rise","rally","surge","growth","beat",
+        "strong","record","gain","up","optimism"
+    ]
+
+    bearish = [
+        "fall","drop","crash","recession","fear",
+        "weak","decline","loss","down","plunge"
+    ]
+
+    score = 0
+
+    for w in bullish:
+        if w in t:
+            score += 1
+
+    for w in bearish:
+        if w in t:
+            score -= 1
+
+    if score >= 2:
+        return "🟢 BULLISH", score
+    elif score <= -2:
+        return "🔴 BEARISH", score
+    else:
+        return "⚪ NEUTRAL", score
 
 # =====================
 # SCORE ENGINE
@@ -101,18 +134,23 @@ def fetch_news():
                 continue
 
             cat = classify(title + summary)
-            sc = score(title + summary)
+            sent, s_score = sentiment(title + summary)
+            base_score = score(title + summary)
 
             msg = {
-                "text": f"{cat}\n\n<b>{title}</b>\n\n{summary[:250]}",
+                "text":
+                    f"{cat}\n"
+                    f"{sent} | Score {s_score + base_score}\n\n"
+                    f"<b>{title}</b>\n\n"
+                    f"{summary[:250]}",
                 "image": image,
                 "title": title,
-                "score": sc
+                "score": base_score
             }
 
             news_list.append(msg)
 
-            if sc >= 2 and title not in seen_news:
+            if base_score >= 2 and title not in seen_news:
                 seen_news.add(title)
                 alerts.append(msg)
 
@@ -122,10 +160,9 @@ def fetch_news():
         return [], []
 
 # =====================
-# ECONOMIC CALENDAR
+# CALENDAR
 # =====================
 def fetch_calendar():
-
     try:
         today = datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -173,7 +210,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb.append([InlineKeyboardButton("⚙️ Admin", callback_data="admin")])
 
     await update.message.reply_text(
-        "🚀 <b>TRADING ENGINE ACTIVE</b>",
+        "🚀 <b>PRO TRADING ENGINE ACTIVE</b>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -193,9 +230,16 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for n in news:
 
             if n["image"]:
-                await q.message.reply_photo(n["image"], caption=n["text"], parse_mode="HTML")
+                await q.message.reply_photo(
+                    n["image"],
+                    caption=n["text"],
+                    parse_mode="HTML"
+                )
             else:
-                await q.message.reply_text(n["text"], parse_mode="HTML")
+                await q.message.reply_text(
+                    n["text"],
+                    parse_mode="HTML"
+                )
 
     elif q.data == "calendar":
 
@@ -209,20 +253,16 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # =====================
-# ADMIN COMMANDS
+# ADMIN
 # =====================
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if update.effective_user.id != ADMIN_ID:
         return
-
     await update.message.reply_text(f"Users: {len(get_users())}")
 
 async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if update.effective_user.id != ADMIN_ID:
         return
-
     await update.message.reply_text("/info /broadcast /list")
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -239,7 +279,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 # =====================
-# AUTO NEWS LOOP
+# AUTO LOOP
 # =====================
 def auto_loop():
 
@@ -253,12 +293,10 @@ def auto_loop():
                 for u in get_users():
 
                     try:
-
                         if a["image"]:
                             bot_app.bot.send_photo(u, a["image"], a["text"], parse_mode="HTML")
                         else:
                             bot_app.bot.send_message(u, a["text"], parse_mode="HTML")
-
                     except:
                         pass
 
@@ -268,7 +306,7 @@ def auto_loop():
             time.sleep(60)
 
 # =====================
-# BOT SETUP
+# BOT INIT
 # =====================
 bot_app = Application.builder().token(TOKEN).build()
 
@@ -279,14 +317,14 @@ bot_app.add_handler(CommandHandler("broadcast", broadcast))
 bot_app.add_handler(CallbackQueryHandler(buttons))
 
 # =====================
-# WEB SERVER THREAD
+# WEB
 # =====================
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     web.run(host="0.0.0.0", port=port)
 
 # =====================
-# START SYSTEM
+# START
 # =====================
 if __name__ == "__main__":
 
