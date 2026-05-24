@@ -15,18 +15,18 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 TOKEN = os.getenv("BOT_TOKEN")
 FINNHUB_KEY = os.getenv("FINNHUB_KEY")
 
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+ADMIN_ID = 2054196564  # FIX HARD (no ENV issues)
 
 DB_FILE = "users.json"
 
 # =====================
-# FLASK (Render keep-alive)
+# FLASK KEEP ALIVE
 # =====================
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "BOT RUNNING"
+    return "BOT ONLINE"
 
 # =====================
 # USERS DB
@@ -74,7 +74,7 @@ def classify(text):
     return "🟠 MACRO"
 
 # =====================
-# SENTIMENT (simplu)
+# SENTIMENT
 # =====================
 def sentiment(text):
     t = text.lower()
@@ -100,18 +100,18 @@ def sentiment(text):
         return "⚪ NEUTRAL"
 
 # =====================
-# NEWS API
+# NEWS API (48H FILTER FIX)
 # =====================
 def fetch_news():
     try:
         url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}"
         data = requests.get(url, timeout=10).json()
 
-        news_list = []
-        alerts = []
-
         now = time.time()
         last_48h = 48 * 3600
+
+        news_list = []
+        alerts = []
 
         for n in data:
 
@@ -154,9 +154,10 @@ def fetch_news():
         return [], []
 
 # =====================
-# CALENDAR
+# CALENDAR (TODAY ONLY)
 # =====================
 def fetch_calendar():
+
     try:
         today = datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -202,7 +203,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        f"BOT ACTIVE\nYour ID: {uid}",
+        "🚀 BOT ACTIVE",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
@@ -213,8 +214,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     q = update.callback_query
     await q.answer()
-
-    print("DEBUG callback:", q.data, q.from_user.id)
 
     if q.data == "news":
 
@@ -234,7 +233,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif q.data == "admin":
 
         if q.from_user.id != ADMIN_ID:
-            await q.message.reply_text("⛔ Not admin")
+            await q.message.reply_text("⛔ NOT ADMIN")
             return
 
         await q.message.reply_text(
@@ -242,7 +241,25 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # =====================
-# AUTO LOOP
+# COMMANDS
+# =====================
+async def news_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    news, _ = fetch_news()
+
+    for n in news:
+
+        if n["image"]:
+            await update.message.reply_photo(n["image"], caption=n["text"], parse_mode="HTML")
+        else:
+            await update.message.reply_text(n["text"], parse_mode="HTML")
+
+async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(fetch_calendar())
+
+# =====================
+# AUTO ALERTS
 # =====================
 def auto_loop():
 
@@ -274,17 +291,19 @@ def auto_loop():
 bot_app = Application.builder().token(TOKEN).build()
 
 bot_app.add_handler(CommandHandler("start", start))
+bot_app.add_handler(CommandHandler("news", news_cmd))
+bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
 bot_app.add_handler(CallbackQueryHandler(buttons))
 
 # =====================
-# WEB SERVER
+# FLASK THREAD
 # =====================
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
 # =====================
-# RUN
+# START SYSTEM
 # =====================
 if __name__ == "__main__":
 
