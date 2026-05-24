@@ -263,6 +263,9 @@ async def start(
 # =====================
 # CALLBACKS
 # =====================
+# =====================
+# CALLBACKS
+# =====================
 async def buttons(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -272,6 +275,7 @@ async def buttons(
 
     # CALENDAR
     if q.data == "calendar":
+
         await q.message.reply_text(
             fetch_calendar(),
             parse_mode="HTML"
@@ -279,28 +283,28 @@ async def buttons(
 
     # NEWS
     elif q.data == "news":
-        _, news = fetch_news() 
 
-        elif q.data == "news":
+        recent, _ = fetch_news()
 
-    recent, _ = fetch_news()
+        if not recent:
+            await q.message.reply_text(
+                "📰 <b>No recent high impact news.</b>",
+                parse_mode="HTML"
+            )
 
-    if not recent:
-        await q.message.reply_text(
-            "📰 <b>No recent high impact news.</b>",
-            parse_mode="HTML"
-        )
+        else:
+            await q.message.reply_text(
+                "\n\n━━━━━━━━━━\n\n".join(
+                    recent
+                ),
+                parse_mode="HTML"
+            )
 
-    else:
-        await q.message.reply_text(
-            "\n\n━━━━━━━━━━\n\n".join(
-                recent
-            ),
-            parse_mode="HTML"
-        )
     # ADMIN
     elif q.data == "admin":
+
         if q.from_user.id == ADMIN_ID:
+
             users = get_users()
 
             await q.message.reply_text(
@@ -308,7 +312,6 @@ async def buttons(
                 f"👥 Users: {len(users)}",
                 parse_mode="HTML"
             )
-
 
 # =====================
 # ADMIN COMMANDS
