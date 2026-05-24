@@ -24,7 +24,7 @@ DB_FILE = "users.json"
 TZ = pytz.timezone("Europe/Chisinau")
 
 # =====================
-# FLASK
+# FLASK KEEP ALIVE
 # =====================
 app = Flask(__name__)
 
@@ -59,6 +59,23 @@ def get_users():
 # MEMORY
 # =====================
 seen_news = set()
+
+# =====================
+# SAFE MESSAGE SENDER (IMPORTANT FIX)
+# =====================
+async def safe_send(query_or_update, text=None, reply_markup=None, parse_mode=None):
+
+    msg = None
+
+    # callback or message
+    if hasattr(query_or_update, "message") and query_or_update.message:
+        msg = query_or_update.message
+    elif hasattr(query_or_update, "callback_query"):
+        msg = query_or_update.callback_query.message
+    else:
+        msg = query_or_update
+
+    await msg.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
 
 # =====================
 # CLASSIFY
@@ -107,6 +124,7 @@ def sentiment(text):
 # NEWS
 # =====================
 def fetch_news():
+
     try:
         url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}"
         data = requests.get(url, timeout=10).json()
@@ -114,7 +132,7 @@ def fetch_news():
         now = time.time()
         last_48h = 48 * 3600
 
-        news_list = []
+        news = []
         alerts = []
 
         for n in data:
@@ -131,26 +149,23 @@ def fetch_news():
             if ts and (now - ts > last_48h):
                 continue
 
-            cat = classify(title + summary)
-            sent = sentiment(title + summary)
-
             msg = {
                 "text":
-                    f"{cat}\n"
-                    f"{sent}\n\n"
+                    f"{classify(title+summary)}\n"
+                    f"{sentiment(title+summary)}\n\n"
                     f"<b>{title}</b>\n\n"
                     f"{summary[:250]}\n\n"
                     f"🔗 {link}",
                 "image": image
             }
 
-            news_list.append(msg)
+            news.append(msg)
 
             if title not in seen_news:
                 seen_news.add(title)
                 alerts.append(msg)
 
-        return news_list, alerts
+        return news, alerts
 
     except:
         return [], []
@@ -201,7 +216,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [InlineKeyboardButton("📰 News", callback_data="news")],
         [InlineKeyboardButton("📅 Calendar", callback_data="calendar")],
-        [InlineKeyboardButton("⚙️ Admin Panel", callback_data="panel")]
+        [InlineKeyboardButton("⚙️ Panel", callback_data="panel")]
     ]
 
     await update.message.reply_text(
@@ -210,14 +225,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =====================
-# PANEL (ADMIN DASHBOARD)
+# PANEL (SAFE FIX)
 # =====================
 async def panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    uid = update.effective_user.id
-
-    if uid != ADMIN_ID:
-        await update.message.reply_text("⛔ Not admin")
+    if update.effective_user.id != ADMIN_ID:
+        await safe_send(update, "⛔ Not admin")
         return
 
     kb = [
@@ -225,13 +238,14 @@ async def panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast")]
     ]
 
-    await update.message.reply_text(
+    await safe_send(
+        update,
         f"⚙️ ADMIN PANEL\nUsers: {len(get_users())}",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
 # =====================
-# CALLBACKS
+# CALLBACKS (NO CRASH VERSION)
 # =====================
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -264,7 +278,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         users = get_users()
-        await q.message.reply_text("👥 USERS:\n" + "\n".join(map(str, users[:50])))
+        await q.message.reply_text("👥 USERS\n" + "\n".join(map(str, users[:50])))
 
     elif q.data == "broadcast":
 
@@ -298,7 +312,7 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = " ".join(context.args)
 
     if not msg:
-        await update.message.reply_text("Usage: /broadcast message")
+        await update.message.reply_text("Usage: /broadcast text")
         return
 
     for u in get_users():
@@ -307,10 +321,8 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-    await update.message.reply_text("Sent.")
-
 # =====================
-# AUTO NEWS LOOP
+# AUTO LOOP
 # =====================
 def auto_loop():
 
@@ -376,11 +388,9 @@ bot_app.add_handler(CallbackQueryHandler(buttons))
 # =====================
 # WEB
 # =====================
-app_flask = app
-
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    app_flask.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
 
 # =====================
 # START
