@@ -374,11 +374,14 @@ bot_app.add_handler(
 
 
 # =====================
-# BOT THREAD
+# FLASK THREAD
 # =====================
-def run_bot():
-    bot_app.run_polling(
-        drop_pending_updates=True
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+
+    web.run(
+        host="0.0.0.0",
+        port=port
     )
 
 
@@ -386,8 +389,9 @@ def run_bot():
 # MAIN
 # =====================
 if __name__ == "__main__":
+
     threading.Thread(
-        target=run_bot,
+        target=run_web,
         daemon=True
     ).start()
 
@@ -396,14 +400,10 @@ if __name__ == "__main__":
         daemon=True
     ).start()
 
-    port = int(
-        os.environ.get(
-            "PORT",
-            10000
-        )
+    print("BOT POLLING STARTED")
+
+    bot_app.run_polling(
+        drop_pending_updates=True
     )
 
-    web.run(
-        host="0.0.0.0",
-        port=port
-    )
+   
