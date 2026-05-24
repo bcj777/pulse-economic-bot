@@ -25,7 +25,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "BOT RUNNING"
+    return "BOT ACTIVE"
 
 # =====================
 # DB
@@ -78,16 +78,16 @@ def classify(text):
 def sentiment(text):
     t = text.lower()
 
-    bullish = ["rise","rally","surge","growth","beat","strong","gain","up"]
-    bearish = ["fall","drop","crash","weak","loss","down","recession"]
+    bull = ["rise","rally","surge","growth","beat","strong","gain","up"]
+    bear = ["fall","drop","crash","weak","loss","down","recession"]
 
     score = 0
 
-    for w in bullish:
+    for w in bull:
         if w in t:
             score += 1
 
-    for w in bearish:
+    for w in bear:
         if w in t:
             score -= 1
 
@@ -106,7 +106,7 @@ def fetch_news():
         url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}"
         data = requests.get(url, timeout=10).json()
 
-        news = []
+        news_list = []
         alerts = []
 
         for n in data[:20]:
@@ -114,6 +114,7 @@ def fetch_news():
             title = n.get("headline","")
             summary = n.get("summary","")
             image = n.get("image","")
+            link = n.get("url","")
 
             if not title:
                 continue
@@ -126,18 +127,20 @@ def fetch_news():
                     f"{cat}\n"
                     f"{sent}\n\n"
                     f"<b>{title}</b>\n\n"
-                    f"{summary[:250]}",
+                    f"{summary[:250]}\n\n"
+                    f"🔗 <a href='{link}'>Read full article</a>",
                 "image": image,
-                "title": title
+                "title": title,
+                "link": link
             }
 
-            news.append(msg)
+            news_list.append(msg)
 
             if title not in seen_news:
                 seen_news.add(title)
                 alerts.append(msg)
 
-        return news, alerts
+        return news_list, alerts
 
     except:
         return [], []
@@ -244,12 +247,11 @@ async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(fetch_calendar(), parse_mode="HTML")
 
 # =====================
-# AUTO ALERTS
+# AUTO LOOP
 # =====================
 def auto_loop():
 
     while True:
-
         try:
 
             _, alerts = fetch_news()
@@ -259,12 +261,10 @@ def auto_loop():
                 for u in get_users():
 
                     try:
-
                         if a["image"]:
                             bot_app.bot.send_photo(u, a["image"], a["text"], parse_mode="HTML")
                         else:
                             bot_app.bot.send_message(u, a["text"], parse_mode="HTML")
-
                     except:
                         pass
 
@@ -274,7 +274,7 @@ def auto_loop():
             time.sleep(60)
 
 # =====================
-# BOT INIT
+# BOT
 # =====================
 bot_app = Application.builder().token(TOKEN).build()
 
@@ -284,7 +284,7 @@ bot_app.add_handler(CommandHandler("calendar", calendar_cmd))
 bot_app.add_handler(CallbackQueryHandler(buttons))
 
 # =====================
-# WEB
+# WEB SERVER
 # =====================
 def run_web():
     port = int(os.environ.get("PORT", 10000))
