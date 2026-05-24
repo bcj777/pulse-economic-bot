@@ -465,21 +465,40 @@ except:
 # AUTO NEWS LOOP
 # =====================
 def auto_news_loop():
+
     while True:
+
         try:
-            news = fetch_news()
+
+            _, news = fetch_news()
 
             if news:
+
                 users = get_users()
 
                 for u in users:
+
                     for n in news:
+
                         try:
-                            bot_app.bot.send_message(
-                                chat_id=u,
-                                text=n,
-                                parse_mode="HTML"
-                            )
+
+                            if n["image"]:
+
+                                bot_app.bot.send_photo(
+                                    chat_id=u,
+                                    photo=n["image"],
+                                    caption=n["caption"],
+                                    parse_mode="HTML"
+                                )
+
+                            else:
+
+                                bot_app.bot.send_message(
+                                    chat_id=u,
+                                    text=n["caption"],
+                                    parse_mode="HTML"
+                                )
+
                         except:
                             pass
 
