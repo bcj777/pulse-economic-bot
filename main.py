@@ -99,63 +99,34 @@ def fetch_news():
         recent_news = []
         auto_alerts = []
 
-        now = datetime.now(
-            timezone.utc
-        ).timestamp()
-
-        for n in data:
+        for n in data[:10]:
 
             title = n.get(
                 "headline",
                 ""
             )
 
-            summary = n.get(
-                "summary",
-                ""
+            msg = (
+                f"📰 <b>NEWS</b>\n\n"
+                f"{title}"
             )
 
-            ts = n.get(
-                "datetime",
-                0
-            )
+            recent_news.append(msg)
 
-            # 24h filter
-            if now - ts > 86400:
-                continue
-
-            text = (
-                title + " " + summary
-            )
-
-            s = score(text)
-
-            if s >= 3:
-
-                msg = (
-                    f"📰 <b>HIGH IMPACT</b>\n\n"
-                    f"{title}"
-                )
-
-                # NEWS BUTTON LIST
-                recent_news.append(msg)
-
-                # AUTO ALERTS
-                if title not in seen_news:
-                    seen_news.add(title)
-                    auto_alerts.append(msg)
-
-        # limit la 10
-        recent_news = recent_news[:10]
+            if title not in seen_news:
+                seen_news.add(title)
+                auto_alerts.append(msg)
 
         return (
             recent_news,
             auto_alerts
         )
 
-    except:
-        return [], []
-
+    except Exception as e:
+        return (
+            [f"ERROR: {e}"],
+            []
+        )
 # =====================
 # CALENDAR ENGINE
 # =====================
