@@ -83,6 +83,56 @@ def score(text):
 from datetime import datetime, timezone
 
 
+def detect_market(text):
+
+    t = text.lower()
+
+    crypto = [
+        "bitcoin",
+        "btc",
+        "crypto",
+        "ethereum",
+        "eth",
+        "solana"
+    ]
+
+    forex = [
+        "usd",
+        "eur",
+        "forex",
+        "fed",
+        "ecb",
+        "rate",
+        "inflation",
+        "cpi"
+    ]
+
+    stock = [
+        "stock",
+        "nasdaq",
+        "dow",
+        "earnings",
+        "shares",
+        "tesla",
+        "apple",
+        "nvidia"
+    ]
+
+    for k in crypto:
+        if k in t:
+            return "🟣 CRYPTO"
+
+    for k in forex:
+        if k in t:
+            return "🟢 FOREX"
+
+    for k in stock:
+        if k in t:
+            return "🔵 STOCK"
+
+    return "🟠 MACRO"
+
+
 def fetch_news():
 
     try:
@@ -99,17 +149,47 @@ def fetch_news():
         recent_news = []
         auto_alerts = []
 
-        for n in data[:10]:
+        now = datetime.now(
+            timezone.utc
+        ).timestamp()
+
+        for n in data:
 
             title = n.get(
                 "headline",
                 ""
             )
 
-            msg = (
-                f"📰 <b>NEWS</b>\n\n"
-                f"{title}"
+            summary = n.get(
+                "summary",
+                ""
             )
+
+            image = n.get(
+                "image",
+                ""
+            )
+
+            ts = n.get(
+                "datetime",
+                0
+            )
+
+            # ultima zi
+            if now - ts > 86400:
+                continue
+
+            market = detect_market(
+                title + " " + summary
+            )
+
+            msg = {
+                "caption":
+                    f"{market}\n\n"
+                    f"<b>{title}</b>\n\n"
+                    f"{summary[:300]}",
+                "image": image
+            }
 
             recent_news.append(msg)
 
@@ -118,15 +198,12 @@ def fetch_news():
                 auto_alerts.append(msg)
 
         return (
-            recent_news,
+            recent_news[:10],
             auto_alerts
         )
 
-    except Exception as e:
-        return (
-            [f"ERROR: {e}"],
-            []
-        )
+    except:
+        return [], []
 # =====================
 # CALENDAR ENGINE
 # =====================
@@ -255,22 +332,41 @@ async def buttons(
     # NEWS
     elif q.data == "news":
 
-        recent, _ = fetch_news()
+    recent, _ = fetch_news()
 
-        if not recent:
-            await q.message.reply_text(
-                "📰 <b>No recent high impact news.</b>",
-                parse_mode="HTML"
-            )
+    if not recent:
 
-        else:
-            await q.message.reply_text(
-                "\n\n━━━━━━━━━━\n\n".join(
-                    recent
-                ),
-                parse_mode="HTML"
-            )
+        await q.message.reply_text(
+            "📰 No recent market news."
+        )
 
+    else:
+
+        for n in recent:
+
+            try:
+
+                if n["image"]:
+
+                    await q.message.reply_photo(
+                        photo=n["image"],
+                        caption=n["caption"],
+                        parse_mode="HTML"
+                    )
+
+                else:
+
+                    await q.message.reply_text(
+                        n["caption"],
+                        parse_mode="HTML"
+                    )
+
+            except:
+
+                await q.message.reply_text(
+                    n["caption"],
+                    parse_mode="HTML"
+                )
     # ADMIN
     elif q.data == "admin":
 
@@ -337,9 +433,27 @@ async def broadcast(
     for u in users:
         try:
             await bot_app.bot.send_message(
-                chat_id=u,
-                text=f"📢 {msg}",
-                parse_mode="HTML"
+                try:
+
+    if n["image"]:
+
+        bot_app.bot.send_photo(
+            chat_id=u,
+            photo=n["image"],
+            caption=n["caption"],
+            parse_mode="HTML"
+        )
+
+    else:
+
+        bot_app.bot.send_message(
+            chat_id=u,
+            text=n["caption"],
+            parse_mode="HTML"
+        )
+
+except:
+    pass
             )
             sent += 1
         except:
