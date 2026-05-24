@@ -113,14 +113,22 @@ def fetch_news():
 # =====================
 # CALENDAR ENGINE
 # =====================
+from datetime import datetime
+
+
 def fetch_calendar():
     try:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+
         url = (
             f"https://finnhub.io/api/v1/calendar/economic"
             f"?token={FINNHUB_KEY}"
         )
 
-        data = requests.get(url, timeout=10).json()
+        data = requests.get(
+            url,
+            timeout=10
+        ).json()
 
         events = data.get(
             "economicCalendar",
@@ -130,16 +138,26 @@ def fetch_calendar():
         out = []
 
         for e in events:
+
+            event_date = str(
+                e.get("date", "")
+            )
+
             impact = str(
                 e.get("impact", "")
             ).lower()
 
-            if "high" in impact:
+            # TODAY + HIGH ONLY
+            if (
+                event_date == today
+                and "high" in impact
+            ):
+
                 out.append(
                     f"📅 <b>HIGH IMPACT</b>\n\n"
-                    f"{e.get('date')} {e.get('time')}\n"
-                    f"{e.get('event')}\n"
-                    f"{e.get('country')}"
+                    f"🕒 {e.get('time')}\n"
+                    f"🌍 {e.get('country')}\n"
+                    f"📊 {e.get('event')}"
                 )
 
         if not out:
@@ -149,9 +167,8 @@ def fetch_calendar():
 
         return "\n\n━━━━━━━━━━\n\n".join(out)
 
-    except:
-        return "Calendar error"
-
+    except Exception as e:
+        return f"Calendar error: {e}"
 
 # =====================
 # START
