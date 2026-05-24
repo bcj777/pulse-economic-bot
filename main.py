@@ -350,6 +350,53 @@ def auto_news_loop():
 
         except:
             time.sleep(60)
+# =====================
+# AUTO CALENDAR 7AM
+# =====================
+last_calendar_day = None
+
+def auto_calendar_loop():
+    global last_calendar_day
+
+    while True:
+        try:
+            now = datetime.now()
+
+            # 07:00 local server
+            if (
+                now.hour == 4
+                and now.minute == 0
+            ):
+
+                today = now.strftime(
+                    "%Y-%m-%d"
+                )
+
+                if last_calendar_day != today:
+
+                    msg = fetch_calendar()
+
+                    users = get_users()
+
+                    for u in users:
+                        try:
+                            bot_app.bot.send_message(
+                                chat_id=u,
+                                text=(
+                                    "📅 <b>DAILY ECONOMIC CALENDAR</b>\n\n"
+                                    + msg
+                                ),
+                                parse_mode="HTML"
+                            )
+                        except:
+                            pass
+
+                    last_calendar_day = today
+
+            time.sleep(60)
+
+        except:
+            time.sleep(60)
 
 
 # =====================
@@ -416,6 +463,11 @@ if __name__ == "__main__":
         target=auto_news_loop,
         daemon=True
     ).start()
+
+    threading.Thread(
+    target=auto_calendar_loop,
+    daemon=True
+).start()
 
     print("BOT POLLING STARTED")
 
