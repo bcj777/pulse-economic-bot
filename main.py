@@ -467,7 +467,6 @@ except:
 def auto_news_loop():
 
     while True:
-
         try:
 
             _, news = fetch_news()
@@ -477,12 +476,11 @@ def auto_news_loop():
                 users = get_users()
 
                 for u in users:
-
                     for n in news:
 
                         try:
 
-                            if n["image"]:
+                            if n.get("image"):
 
                                 bot_app.bot.send_photo(
                                     chat_id=u,
@@ -506,6 +504,37 @@ def auto_news_loop():
 
         except:
             time.sleep(60)
+
+
+# =====================
+# RUN BOT + WEB
+# =====================
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+
+    web.run(
+        host="0.0.0.0",
+        port=port
+    )
+
+
+if __name__ == "__main__":
+
+    threading.Thread(
+        target=run_web,
+        daemon=True
+    ).start()
+
+    threading.Thread(
+        target=auto_news_loop,
+        daemon=True
+    ).start()
+
+    print("BOT STARTED")
+
+    bot_app.run_polling(
+        drop_pending_updates=True
+    )
 # =====================
 # AUTO CALENDAR 7AM
 # =====================
