@@ -4,7 +4,10 @@ import time
 import threading
 import requests
 from datetime import datetime
+
+import pytz
 from flask import Flask
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -15,18 +18,19 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 TOKEN = os.getenv("BOT_TOKEN")
 FINNHUB_KEY = os.getenv("FINNHUB_KEY")
 
-ADMIN_ID = 2054196564  # FIX HARD (no ENV issues)
-
+ADMIN_ID = 2054196564
 DB_FILE = "users.json"
 
+TZ = pytz.timezone("Europe/Chisinau")
+
 # =====================
-# FLASK KEEP ALIVE
+# FLASK
 # =====================
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "BOT ONLINE"
+    return "BOT RUNNING"
 
 # =====================
 # USERS DB
@@ -100,7 +104,7 @@ def sentiment(text):
         return "⚪ NEUTRAL"
 
 # =====================
-# NEWS API (48H FILTER FIX)
+# NEWS
 # =====================
 def fetch_news():
     try:
@@ -124,7 +128,6 @@ def fetch_news():
             if not title:
                 continue
 
-            # 48h filter
             if ts and (now - ts > last_48h):
                 continue
 
@@ -248,7 +251,6 @@ async def news_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     news, _ = fetch_news()
 
     for n in news:
-
         if n["image"]:
             await update.message.reply_photo(n["image"], caption=n["text"], parse_mode="HTML")
         else:
@@ -259,9 +261,9 @@ async def calendar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(fetch_calendar())
 
 # =====================
-# AUTO ALERTS
+# AUTO NEWS LOOP
 # =====================
-def auto_loop():
+def auto_news_loop():
 
     while True:
         try:
@@ -286,6 +288,34 @@ def auto_loop():
             time.sleep(60)
 
 # =====================
+# SCHEDULER (7AM WEEKDAYS)
+# =====================
+def send_morning_calendar():
+
+    users = get_users()
+    msg = fetch_calendar()
+
+    for u in users:
+        try:
+            bot_app.bot.send_message(u, "🌅 DAILY ECONOMIC CALENDAR\n\n" + msg)
+        except:
+            pass
+
+def start_scheduler():
+
+    scheduler = BackgroundScheduler(timezone=TZ)
+
+    scheduler.add_job(
+        send_morning_calendar,
+        "cron",
+        day_of_week="mon-fri",
+        hour=7,
+        minute=0
+    )
+
+    scheduler.start()
+
+# =====================
 # BOT INIT
 # =====================
 bot_app = Application.builder().token(TOKEN).build()
@@ -303,11 +333,13 @@ def run_web():
     app.run(host="0.0.0.0", port=port)
 
 # =====================
-# START SYSTEM
+# START
 # =====================
 if __name__ == "__main__":
 
     threading.Thread(target=run_web, daemon=True).start()
-    threading.Thread(target=auto_loop, daemon=True).start()
+    threading.Thread(target=auto_news_loop, daemon=True).start()
+
+    start_scheduler()
 
     bot_app.run_polling(drop_pending_updates=True)
