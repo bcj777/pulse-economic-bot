@@ -195,3 +195,215 @@ async def start(
             keyboard
         )
     )
+
+
+# =====================
+# CALLBACKS
+# =====================
+async def buttons(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    q = update.callback_query
+    await q.answer()
+
+    # CALENDAR
+    if q.data == "calendar":
+        await q.message.reply_text(
+            fetch_calendar(),
+            parse_mode="HTML"
+        )
+
+    # NEWS
+    elif q.data == "news":
+        news = fetch_news()
+
+        if not news:
+            await q.message.reply_text(
+                "📰 <b>No high impact news.</b>",
+                parse_mode="HTML"
+            )
+        else:
+            await q.message.reply_text(
+                "\n\n".join(news),
+                parse_mode="HTML"
+            )
+
+    # ADMIN
+    elif q.data == "admin":
+        if q.from_user.id == ADMIN_ID:
+            users = get_users()
+
+            await q.message.reply_text(
+                f"⚙️ <b>ADMIN PANEL</b>\n\n"
+                f"👥 Users: {len(users)}",
+                parse_mode="HTML"
+            )
+
+
+# =====================
+# ADMIN COMMANDS
+# =====================
+async def info(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    users = get_users()
+
+    await update.message.reply_text(
+        f"👥 Users: {len(users)}",
+        parse_mode="HTML"
+    )
+
+
+async def list_cmd(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    await update.message.reply_text(
+        "/info\n"
+        "/broadcast mesaj\n"
+        "/list",
+        parse_mode="HTML"
+    )
+
+
+async def broadcast(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    if not context.args:
+        return await update.message.reply_text(
+            "Usage:\n/broadcast mesaj"
+        )
+
+    msg = " ".join(context.args)
+
+    users = get_users()
+    sent = 0
+
+    for u in users:
+        try:
+            await bot_app.bot.send_message(
+                chat_id=u,
+                text=f"📢 {msg}",
+                parse_mode="HTML"
+            )
+            sent += 1
+        except:
+            pass
+
+    await update.message.reply_text(
+        f"Sent: {sent}"
+    )
+
+
+# =====================
+# AUTO NEWS LOOP
+# =====================
+def auto_news_loop():
+    while True:
+        try:
+            news = fetch_news()
+
+            if news:
+                users = get_users()
+
+                for u in users:
+                    for n in news:
+                        try:
+                            bot_app.bot.send_message(
+                                chat_id=u,
+                                text=n,
+                                parse_mode="HTML"
+                            )
+                        except:
+                            pass
+
+            time.sleep(60)
+
+        except:
+            time.sleep(60)
+
+
+# =====================
+# HANDLERS
+# =====================
+bot_app.add_handler(
+    CommandHandler(
+        "start",
+        start
+    )
+)
+
+bot_app.add_handler(
+    CommandHandler(
+        "info",
+        info
+    )
+)
+
+bot_app.add_handler(
+    CommandHandler(
+        "list",
+        list_cmd
+    )
+)
+
+bot_app.add_handler(
+    CommandHandler(
+        "broadcast",
+        broadcast
+    )
+)
+
+bot_app.add_handler(
+    CallbackQueryHandler(
+        buttons
+    )
+)
+
+
+# =====================
+# BOT THREAD
+# =====================
+def run_bot():
+    bot_app.run_polling(
+        drop_pending_updates=True
+    )
+
+
+# =====================
+# MAIN
+# =====================
+if __name__ == "__main__":
+    threading.Thread(
+        target=run_bot,
+        daemon=True
+    ).start()
+
+    threading.Thread(
+        target=auto_news_loop,
+        daemon=True
+    ).start()
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            10000
+        )
+    )
+
+    web.run(
+        host="0.0.0.0",
+        port=port
+    )
